@@ -34,7 +34,7 @@ function LoginForm({ onConnect }: { onConnect: (user: Session) => void }) {
     setError('')
     setMessage('')
     try {
-      const { user, pending } = await authRequest(register ? 'register' : 'login', { email: form.get('email'), password })
+      const { user, pending } = await authRequest(register ? 'register' : 'login', { email: form.get('email'), password, bootstrapCode: form.get('bootstrapCode') })
       if (user) onConnect(user)
       else if (pending) {
         setRegister(false)
@@ -62,6 +62,10 @@ function LoginForm({ onConnect }: { onConnect: (user: Session) => void }) {
           <p className="sub">Utilise au moins 12 caractères.</p>
           <label>Confirmer le mot de passe<input name="confirmation" type="password" required
             maxLength={128} autoComplete="new-password" /></label>
+          <details>
+            <summary>Premier administrateur sur Vercel</summary>
+            <label>Code d’installation<input name="bootstrapCode" type="password" maxLength={128} autoComplete="off" /></label>
+          </details>
         </>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="btn primary" type="submit" disabled={busy}>

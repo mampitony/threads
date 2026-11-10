@@ -23,7 +23,7 @@ L’e-mail sert d’identifiant. Le serveur local stocke les comptes et les sess
 
 Chaque compte a son propre planning dans le stockage du navigateur. Le premier compte créé peut récupérer le planning de la version précédente en utilisant le même navigateur et la même adresse. Les plannings ne sont pas synchronisés entre les navigateurs. Les données du navigateur restent accessibles à une personne ayant accès à ce profil Chrome ou à ses outils de développement.
 
-Cette version est configurée pour une utilisation locale. Le serveur Vite doit tourner pour l’authentification et la récupération Threads.
+En local, le serveur Vite gère l’authentification et la récupération Threads. La procédure ci-dessous configure le serveur en ligne sur Vercel.
 
 ## Récupérer la légende, l’auteur et les J’aime de Threads
 
@@ -32,7 +32,7 @@ Cette version est configurée pour une utilisation locale. Le serveur Vite doit 
 3. Ouvre `.env.local` et colle la clé après `SCRAPEATLAS_API_KEY=`. Garde ce fichier privé.
 4. Relance `npm run dev`. Dans **Scrapping Tylan**, colle le lien direct ou le lien de partage d’un post public Threads et clique sur **Récupérer les données du post**.
 
-Le formulaire remplit la légende, le nombre de J’aime et le champ Auteur avec l’identifiant Threads de la publication (@identifiant) à partir de la même requête. Si une valeur manque, le champ correspondant conserve sa saisie et reste modifiable. Le bouton fonctionne avec le serveur Vite local (`npm run dev` ou `npm run preview`). La version statique dans `dist/` doit disposer d’une route serveur équivalente pour activer cette fonction sur un hébergement. Sans clé ou si la publication est inaccessible, tu peux renseigner les champs à la main.
+Le formulaire remplit la légende, le nombre de J’aime et le champ Auteur avec l’identifiant Threads de la publication (@identifiant) à partir de la même requête. Si une valeur manque, le champ correspondant conserve sa saisie et reste modifiable. Le bouton fonctionne avec le serveur Vite local (`npm run dev` ou `npm run preview`). Sur Vercel, les routes du dossier `api/` assurent la connexion et la récupération Threads. Sans clé ou si la publication est inaccessible, tu peux renseigner les champs à la main.
 
 ## Doublons et statistiques du planning
 
@@ -57,3 +57,23 @@ La compilation vérifie le TypeScript et génère le site statique dans `dist/`.
 - `src/styles.css` contient les styles de l’interface.
 
 Les saisies sont stockées par adresse de site et par navigateur. Sur l’adresse de l’application d’origine, la version React retrouve les saisies existantes grâce au même format de stockage. Une copie exécutée sur localhost commence avec son propre planning. Le CSV sert à consulter ou conserver une copie des saisies.
+
+## Déployer sur Vercel
+
+1. Crée une base PostgreSQL, par exemple via [Neon](https://neon.tech/). Dans son éditeur SQL, exécute le contenu de `server/schema-postgres.sql` sur la base destinée à la production.
+2. Dans Vercel, importe ton dépôt GitHub. Choisis le préréglage **Vite** et le dossier racine qui contient `package.json`. Utilise Node.js 24, la commande `npm run build` et le dossier de sortie `dist`.
+3. Ajoute ces variables dans **Environment Variables**, pour **Production**.
+
+   | Variable | Valeur |
+   | --- | --- |
+   | `DATABASE_URL` | Chaîne de connexion PostgreSQL avec pool, fournie par Neon |
+   | `SCRAPEATLAS_API_KEY` | Clé utilisée pour récupérer les données Threads |
+   | `ADMIN_EMAIL` | Ton adresse e-mail pour le premier compte administrateur |
+   | `ADMIN_SETUP_CODE` | Code aléatoire privé, de 32 caractères ou plus |
+
+   Pour générer le code d’installation dans le terminal VS Code, utilise `node -e "console.log(require('node:crypto').randomBytes(24).toString('hex'))"`. Copie les valeurs dans Vercel. Garde les secrets hors du dépôt Git.
+
+4. Clique sur **Déployer**. Ouvre ensuite l’adresse de production, puis **Créer un compte**. Saisis l’e-mail configuré dans `ADMIN_EMAIL` et choisis ton mot de passe. Ouvre **Premier administrateur sur Vercel**, saisis le code d’installation et valide. Les autres comptes pourront ensuite demander l’accès.
+5. Une fois le premier compte créé, le code d’installation ne sert plus. Tu peux retirer `ADMIN_SETUP_CODE` des variables de production et redéployer.
+
+La base PostgreSQL commence vide. Les comptes SQLite existants demandent une migration distincte. Les plannings sont conservés par compte et par adresse dans le navigateur. Les données de localhost ne sont donc pas transférées automatiquement vers le nouveau domaine.
