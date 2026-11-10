@@ -42,7 +42,7 @@ export function planningStorageKey(accountId: string, firstAccount: boolean) {
   return key
 }
 export const emptyPost: Post = { count: '', caption: '', url: '', owner: '' }
-const initialPlanning: Planning = {
+export const initialPlanning: Planning = {
   accounts: [
     { id: 'lea-1', name: 'Lea 1', handle: 'martinslae' },
     { id: 'lea-2', name: 'Lea 2', handle: 'lea.laventiere' },
@@ -75,9 +75,9 @@ export function readPlanning(storageKey: string): Planning {
 
 export function loadPlanning(storageKey: string) {
   try {
-    return { data: readPlanning(storageKey), error: '' }
+    return { data: readPlanning(storageKey), error: '', hasSavedData: localStorage.getItem(storageKey) !== null }
   } catch {
-    return { data: initialPlanning, error: 'La sauvegarde locale n’a pas pu être lue.' }
+    return { data: initialPlanning, error: 'La sauvegarde locale n’a pas pu être lue.', hasSavedData: false }
   }
 }
 

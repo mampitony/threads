@@ -76,4 +76,12 @@ Les saisies sont stockées par adresse de site et par navigateur. Sur l’adress
 4. Clique sur **Déployer**. Ouvre ensuite l’adresse de production, puis **Créer un compte**. Saisis l’e-mail configuré dans `ADMIN_EMAIL` et choisis ton mot de passe. Ouvre **Premier administrateur sur Vercel**, saisis le code d’installation et valide. Les autres comptes pourront ensuite demander l’accès.
 5. Une fois le premier compte créé, le code d’installation ne sert plus. Tu peux retirer `ADMIN_SETUP_CODE` des variables de production et redéployer.
 
-La base PostgreSQL commence vide. Les comptes SQLite existants demandent une migration distincte. Les plannings sont conservés par compte et par adresse dans le navigateur. Les données de localhost ne sont donc pas transférées automatiquement vers le nouveau domaine.
+La base PostgreSQL commence vide. Les comptes SQLite existants demandent une migration distincte. En production, le planning est partagé entre les administrateurs et les comptes approuvés. En local, le planning reste séparé par compte et par navigateur. Les données de localhost ne sont pas transférées automatiquement vers le domaine de production.
+
+### Mettre à jour un projet Vercel déjà déployé
+
+1. Dans l’éditeur SQL de Neon, sur la base utilisée par `DATABASE_URL` en production, exécute `server/schema-planning.sql`. Cette migration ajoute une table au projet existant.
+2. Sur Vercel, configure `SCRAPEATLAS_API_KEY` pour **Production** si la clé manque. Publie le code mis à jour et redéploie.
+3. Ouvre le site avec deux comptes approuvés. Les modèles, les comptes Threads, les créneaux et les références Scrapping Tylan partagent la même base. Les autres onglets actualisent le planning toutes les cinq secondes et quand ils reprennent le focus.
+
+Si le planning partagé est vide, un administrateur peut cliquer sur **Importer mon ancien planning** depuis le navigateur et l’adresse qui contiennent ses anciennes données. Cette opération initialise le planning partagé avec sa copie. Les anciennes données des autres navigateurs ne sont pas fusionnées automatiquement. Les ajouts manquants peuvent être ressaisis dans le planning partagé.

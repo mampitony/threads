@@ -158,7 +158,7 @@ export function Tylan({ data, selectedDate, onSave, onDelete, onUse }: {
   selectedDate: string
   onSave: SaveReference
   onDelete: (id: string) => void
-  onUse: (reference: TylanReference, target: CaptionTarget) => string
+  onUse: (reference: TylanReference, target: CaptionTarget) => Promise<string>
 }) {
   const [editor, setEditor] = useState<{ reference?: TylanReference } | null>(null)
   const [selected, setSelected] = useState<TylanReference | null>(null)

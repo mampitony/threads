@@ -21,3 +21,9 @@ CREATE TABLE IF NOT EXISTS auth_attempts (
   count integer NOT NULL,
   expires_at bigint NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS shared_planning (
+  id integer PRIMARY KEY CHECK (id = 1),
+  revision integer NOT NULL CHECK (revision > 0),
+  data jsonb NOT NULL CHECK (jsonb_typeof(data) = 'object')
+);

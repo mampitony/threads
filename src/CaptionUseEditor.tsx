@@ -9,17 +9,19 @@ export function CaptionUseEditor({ reference, accounts, models, selectedDate, on
   accounts: Account[]
   models: Model[]
   selectedDate: string
-  onUse: (reference: TylanReference, target: CaptionTarget) => string
+  onUse: (reference: TylanReference, target: CaptionTarget) => Promise<string>
   onClose: () => void
 }) {
   const [modelId, setModelId] = useState('')
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
   const availableAccounts = modelId === 'unassigned'
     ? accounts.filter(account => !models.some(model => model.id === account.modelId))
     : accounts.filter(account => account.modelId === modelId)
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (saving) return
     const fields = new FormData(event.currentTarget)
     const target = {
       modelId: modelId === 'unassigned' ? '' : modelId,
@@ -32,12 +34,14 @@ export function CaptionUseEditor({ reference, accounts, models, selectedDate, on
       setError('Choisis un compte, une date et un créneau valides.')
       return
     }
-    const message = onUse(reference, target)
+    setSaving(true)
+    const message = await onUse(reference, target)
+    setSaving(false)
     if (message) setError(message)
     else onClose()
   }
 
-  return <Modal title="Utiliser cette légende" onClose={onClose}>
+  return <Modal title="Utiliser cette légende" onClose={() => { if (!saving) onClose() }}>
     <p className="sub">La légende de {reference.author} sera copiée dans le planning du compte choisi.</p>
     <form onSubmit={submit} onChange={() => setError('')}>
       <label>Modèle<select required value={modelId} onChange={event => setModelId(event.target.value)}>
@@ -56,8 +60,8 @@ export function CaptionUseEditor({ reference, accounts, models, selectedDate, on
       </select></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
-        <button className="btn" type="button" onClick={onClose}>Annuler</button>
-        <button className="btn primary" type="submit" disabled={!modelId || !availableAccounts.length}>Ajouter au planning</button>
+        <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
+        <button className="btn primary" type="submit" disabled={saving || !modelId || !availableAccounts.length}>Ajouter au planning</button>
       </div>
     </form>
   </Modal>

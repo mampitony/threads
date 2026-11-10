@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { App } from './App'
 import { planningStorageKey } from './planning'
 
-type Session = { id: string; email: string; firstAccount: boolean; isAdmin: boolean; expiresAt: number }
+type Session = { id: string; email: string; firstAccount: boolean; isAdmin: boolean; sharedPlanning: boolean; expiresAt: number }
 
 async function authRequest(action: 'session' | 'login' | 'register' | 'logout', fields?: object) {
   const response = await fetch('/api/auth/' + action, action === 'session' ? undefined : {
@@ -133,6 +133,6 @@ export function AuthGate() {
   if (!session) return <LoginForm onConnect={connect} />
   return <>
     {logoutError && <p className="toast" role="alert">{logoutError}</p>}
-    <App key={session.id} storageKey={workspaceKey} email={session.email} isAdmin={session.isAdmin} onLogout={logout} />
+    <App key={session.id} storageKey={workspaceKey} email={session.email} isAdmin={session.isAdmin} shared={session.sharedPlanning} onLogout={logout} />
   </>
 }

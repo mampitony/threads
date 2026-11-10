@@ -6,27 +6,34 @@ import type { Account, Model } from './planning'
 export function ModelEditor({ model, onClose, onSave, onRemove }: {
   model?: Model
   onClose: () => void
-  onSave: (name: string) => string
-  onRemove?: () => string
+  onSave: (name: string) => Promise<string>
+  onRemove?: () => Promise<string>
 }) {
   const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (saving) return
     const name = String(new FormData(event.currentTarget).get('name') ?? '').trim()
-    setError(name ? onSave(name) : 'Saisis un nom de modèle.')
+    setSaving(true)
+    setError(name ? await onSave(name) : 'Saisis un nom de modèle.')
+    setSaving(false)
   }
 
-  return <Modal title={model ? 'Modifier le modèle' : 'Ajouter un modèle'} onClose={onClose}>
+  return <Modal title={model ? 'Modifier le modèle' : 'Ajouter un modèle'} onClose={() => { if (!saving) onClose() }}>
     <form onSubmit={submit} onChange={() => setError('')}>
       <label>Nom du modèle<input name="name" required maxLength={60} defaultValue={model?.name} /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
-        {onRemove && <button className="btn danger" type="button" onClick={() => {
-          if (window.confirm('Supprimer ce modèle vide ?')) setError(onRemove())
+        {onRemove && <button className="btn danger" type="button" disabled={saving} onClick={async () => {
+          if (!window.confirm('Supprimer ce modèle vide ?')) return
+          setSaving(true)
+          setError(await onRemove())
+          setSaving(false)
         }}>Supprimer</button>}
-        <button className="btn" type="button" onClick={onClose}>Annuler</button>
-        <button className="btn primary" type="submit">Enregistrer</button>
+        <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
+        <button className="btn primary" type="submit" disabled={saving}>Enregistrer</button>
       </div>
     </form>
   </Modal>

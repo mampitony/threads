@@ -1,3 +1,4 @@
+import { readSharedPlanning, writeSharedPlanning } from './shared-planning.mjs'
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
 
@@ -30,17 +31,17 @@ function cookie(req, token, age, secureOnly) {
   return `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${secure}`
 }
 
-async function readJson(req) {
+async function readJson(req, limit = 4096) {
   if (req.body !== undefined) {
     const raw = typeof req.body === 'string' ? req.body : JSON.stringify(req.body)
-    if (!raw || Buffer.byteLength(raw) > 4096) return null
+    if (!raw || Buffer.byteLength(raw) > limit) return null
     try { return JSON.parse(raw) } catch { return null }
   }
   const buffers = []
   let size = 0
   for await (const chunk of req.iterator({ destroyOnReturn: false })) {
     size += chunk.length
-    if (size > 4096) {
+    if (size > limit) {
       req.resume()
       return null
     }
@@ -66,7 +67,7 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
   let deriving = 0
 
   async function publicSession(user, expiresAt) {
-    return { id: user.id, email: user.email, firstAccount: user.id === (await db.get(firstQuery))?.id, isAdmin: user.access === 'admin', expiresAt: Number(expiresAt) }
+    return { id: user.id, email: user.email, firstAccount: user.id === (await db.get(firstQuery))?.id, isAdmin: user.access === 'admin', sharedPlanning: secureOnly, expiresAt: Number(expiresAt) }
   }
 
   async function handle(req, res, next) {
@@ -78,6 +79,33 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
     const hashedToken = token ? digest(token) : null
     const session = hashedToken ? await db.get(sessionQuery, hashedToken, Date.now()) : null
 
+    const origin = req.headers.origin
+    const expectedOrigin = ((secureOnly || req.socket?.encrypted) ? 'https://' : 'http://') + req.headers.host
+    const fetchSite = req.headers['sec-fetch-site']
+    const trustedRequest = req.headers['x-planning-auth'] === '1'
+      && (!fetchSite || fetchSite === 'same-origin')
+      && (!origin || origin === expectedOrigin || fetchSite === 'same-origin')
+
+    if (secureOnly && path === '/api/planning') {
+      if (!session) return json(res, 401, { error: 'Connecte-toi pour accéder au panneau.' })
+      if (!trustedRequest) return json(res, 403, { error: 'Requête non autorisée.' })
+      try {
+        if (req.method === 'GET') return json(res, 200, await readSharedPlanning(db))
+        if (req.method !== 'PUT') return json(res, 405, { error: 'Méthode non autorisée.' })
+        if (req.headers['content-type']?.split(';')[0] !== 'application/json') {
+          return json(res, 400, { error: 'Format du planning invalide.' })
+        }
+        const body = await readJson(req, 2 * 1024 * 1024)
+        const [status, result] = await writeSharedPlanning(db, body)
+        return json(res, status, result)
+      } catch (error) {
+        if (error?.code === '42P01') {
+          return json(res, 503, { error: 'Exécute server/schema-planning.sql dans Neon pour activer le planning partagé.' })
+        }
+        throw error
+      }
+    }
+
     if (!path.startsWith('/api/auth/')) {
       if (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin') {
         return json(res, 403, { error: 'Requête non autorisée.' })
@@ -88,12 +116,7 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
     if (path === '/api/auth/session' && req.method === 'GET') {
       return json(res, 200, { user: session ? await publicSession(session, session.expires_at) : null })
     }
-    const origin = req.headers.origin
-    const expectedOrigin = ((secureOnly || req.socket?.encrypted) ? 'https://' : 'http://') + req.headers.host
-    const fetchSite = req.headers['sec-fetch-site']
-    const trustedRequest = req.headers['x-planning-auth'] === '1'
-      && (!fetchSite || fetchSite === 'same-origin')
-      && (!origin || origin === expectedOrigin || fetchSite === 'same-origin')
+
 
     if (path === '/api/auth/accounts') {
       if (!session) return json(res, 401, { error: 'Connecte-toi pour accéder au panneau.' })

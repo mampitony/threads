@@ -43,7 +43,7 @@ function reply(response, status, payload) {
   response.end(JSON.stringify(payload))
 }
 
-export function threadsLikesMiddleware(apiKey, fetcher = fetch) {
+export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false) {
   return async (request, response, next) => {
     const path = request.url ?? '/'
     if (!path.startsWith('/')) return next()
@@ -78,7 +78,9 @@ export function threadsLikesMiddleware(apiKey, fetcher = fetch) {
 
     if (resolveOnly) return reply(response, 200, { url: post.url.href })
     if (!apiKey?.trim()) {
-      return reply(response, 503, { error: 'Configure SCRAPEATLAS_API_KEY dans .env.local, puis redémarre le serveur.' })
+      return reply(response, 503, { error: deployed
+        ? 'Ajoute SCRAPEATLAS_API_KEY dans les variables Production de Vercel, puis redéploie le projet.'
+        : 'Configure SCRAPEATLAS_API_KEY dans .env.local, puis redémarre le serveur.' })
     }
 
     const endpoint = new URL('https://api.scrapeatlas.com/v1/threads/post')

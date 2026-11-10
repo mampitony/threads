@@ -3,7 +3,7 @@ import { openPostgresAuth } from './auth-postgres.mjs'
 import { threadsLikesMiddleware } from './threads-likes.mjs'
 
 let auth
-const threads = threadsLikesMiddleware(process.env.SCRAPEATLAS_API_KEY)
+const threads = threadsLikesMiddleware(process.env.SCRAPEATLAS_API_KEY, fetch, true)
 
 export default function handler(req, res) {
   if (!process.env.DATABASE_URL) {

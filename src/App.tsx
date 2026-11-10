@@ -1,3 +1,5 @@
+import { sharedPlanningRequest } from './sharedPlanning'
+import type { PlanningSnapshot } from './sharedPlanning'
 import { PendingAccounts } from './PendingAccounts'
 import { canonicalPublication, lookupThreads, publicationKey, threadsLink } from './threads'
 import { useEffect, useRef, useState } from 'react'
@@ -6,7 +8,7 @@ import { Modal } from './Modal'
 import { Tylan } from './Tylan'
 import { AccountGroup, ModelEditor } from './Models'
 import {
-  dateKey, emptyPost, exportCsv, formatDate, fromKey, loadPlanning, postKey,
+  dateKey, emptyPost, exportCsv, formatDate, fromKey, loadPlanning, postKey, initialPlanning as emptyWorkspace,
   readPlanning, shiftDate, slots, todayKey, webUrl,
 } from './planning'
 import type { Account, CaptionTarget, Model, Planning, Post, Slot, TylanReference } from './planning'
@@ -111,9 +113,10 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
   post?: Post
   owners: string[]
   onClose: () => void
-  onSave: (post: Post, message?: string) => void
+  onSave: (post: Post, message?: string) => Promise<string>
 }) {
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -138,8 +141,9 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
       next.comments = post.comments
     }
     let message = ''
+    setSaving(true)
+    setError('')
     if (threadsLink(next.url)) {
-      setSaving(true)
       try {
         const stats = await lookupThreads(next.url)
         if (stats.likes != null) next.likes = stats.likes
@@ -149,11 +153,10 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
         }
       } catch {
         message = 'Créneau enregistré. Statistiques indisponibles, tu peux réessayer en enregistrant de nouveau.'
-      } finally {
-        setSaving(false)
       }
     }
-    onSave(next, message)
+    setError(await onSave(next, message))
+    setSaving(false)
   }
 
   return <Modal title="Modifier le créneau" onClose={() => { if (!saving) onClose() }}>
@@ -168,9 +171,13 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
         onInput={event => event.currentTarget.setCustomValidity('')} /></label>
       <label>Responsable<input name="owner" disabled={saving} maxLength={100} list="owners" placeholder="Saisir ou choisir un nom" defaultValue={post?.owner} /></label>
       <datalist id="owners">{owners.map(owner => <option key={owner} value={owner} />)}</datalist>
+      {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
-        {post && <button className="btn danger" type="button" disabled={saving} onClick={() => {
-          if (window.confirm('Effacer les données de ce créneau ?')) onSave(emptyPost)
+        {post && <button className="btn danger" type="button" disabled={saving} onClick={async () => {
+          if (!window.confirm('Effacer les données de ce créneau ?')) return
+          setSaving(true)
+          setError(await onSave(emptyPost))
+          setSaving(false)
         }}>Effacer</button>}
         <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
         <button className="btn primary" type="submit" disabled={saving}>{saving ? 'Récupération…' : 'Enregistrer'}</button>
@@ -184,11 +191,13 @@ function AccountEditor({ account, models, modelId, onClose, onSave }: {
   onClose: () => void
   models: Model[]
   modelId?: string
-  onSave: (name: string, handle: string, modelId: string) => string
+  onSave: (name: string, handle: string, modelId: string) => Promise<string>
 }) {
   const [error, setError] = useState('')
-  function submit(event: FormEvent<HTMLFormElement>) {
+  const [saving, setSaving] = useState(false)
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (saving) return
     const form = event.currentTarget
     const nameInput = form.elements.namedItem('name') as HTMLInputElement
     const handleInput = form.elements.namedItem('handle') as HTMLInputElement
@@ -205,10 +214,12 @@ function AccountEditor({ account, models, modelId, onClose, onSave }: {
       return
     }
     const modelInput = form.elements.namedItem('modelId') as HTMLSelectElement
-    setError(onSave(name, handle, modelInput.value))
+    setSaving(true)
+    setError(await onSave(name, handle, modelInput.value))
+    setSaving(false)
   }
 
-  return <Modal title={account ? 'Modifier le compte' : 'Ajouter un compte'} onClose={onClose}>
+  return <Modal title={account ? 'Modifier le compte' : 'Ajouter un compte'} onClose={() => { if (!saving) onClose() }}>
     <form onSubmit={submit} onChange={() => setError('')}>
       <label>Nom du compte<input name="name" required maxLength={60} placeholder="Ex. Lea 4" defaultValue={account?.name}
         onInput={event => event.currentTarget.setCustomValidity('')} /></label>
@@ -220,8 +231,8 @@ function AccountEditor({ account, models, modelId, onClose, onSave }: {
       </select></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
-        <button className="btn" type="button" onClick={onClose}>Annuler</button>
-        <button className="btn primary" type="submit">Enregistrer</button>
+        <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
+        <button className="btn primary" type="submit" disabled={saving}>Enregistrer</button>
       </div>
     </form>
   </Modal>
@@ -231,14 +242,19 @@ type Editor = { type: 'post'; account: Account; slot: Slot; date: string }
   | { type: 'account'; account?: Account; modelId?: string }
   | { type: 'model'; model?: Model }
 
-export function App({ storageKey, email, isAdmin, onLogout }: {
+export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   storageKey: string
   email: string
   isAdmin: boolean
+  shared: boolean
   onLogout: () => void
 }) {
   const [initial] = useState(() => loadPlanning(storageKey))
   const [data, setData] = useState(initial.data)
+  const [revision, setRevision] = useState<number | null>(null)
+  const latestRevision = useRef(-1)
+  const [syncError, setSyncError] = useState('')
+  const [importing, setImporting] = useState(false)
   const [selected, setSelected] = useState('2026-11-10')
   const [filter, setFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
@@ -247,16 +263,48 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
   const [message, setMessage] = useState(initial.error)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
+  function applySnapshot(snapshot: PlanningSnapshot) {
+    if (snapshot.revision < latestRevision.current) return
+    setSyncError('')
+    if (snapshot.revision === latestRevision.current) return
+    latestRevision.current = snapshot.revision
+    setRevision(snapshot.revision)
+    setData(snapshot.data ?? emptyWorkspace)
+  }
+
   useEffect(() => {
-    function updateFromStorage(event: StorageEvent) {
-      if (event.key === storageKey || event.key === null) setData(loadPlanning(storageKey).data)
+    if (!shared) {
+      function updateFromStorage(event: StorageEvent) {
+        if (event.key === storageKey || event.key === null) setData(loadPlanning(storageKey).data)
+      }
+      window.addEventListener('storage', updateFromStorage)
+      return () => {
+        window.removeEventListener('storage', updateFromStorage)
+        clearTimeout(timer.current)
+      }
     }
-    window.addEventListener('storage', updateFromStorage)
+
+    const controller = new AbortController()
+    async function refresh() {
+      try {
+        const snapshot = await sharedPlanningRequest(undefined, controller.signal)
+        if (snapshot && !controller.signal.aborted) applySnapshot(snapshot)
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setSyncError(error instanceof Error ? error.message : 'Le planning partagé est indisponible.')
+        }
+      }
+    }
+    void refresh()
+    const interval = window.setInterval(refresh, 5000)
+    window.addEventListener('focus', refresh)
     return () => {
-      window.removeEventListener('storage', updateFromStorage)
+      controller.abort()
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refresh)
       clearTimeout(timer.current)
     }
-  }, [storageKey])
+  }, [shared, storageKey])
 
   function notice(text: string) {
     clearTimeout(timer.current)
@@ -264,23 +312,67 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
     timer.current = setTimeout(() => setMessage(''), 6000)
   }
 
-  function commit(update: (current: Planning) => Planning | null) {
+  async function readCurrent() {
+    if (!shared) return readPlanning(storageKey)
+    const snapshot = await sharedPlanningRequest()
+    if (snapshot) applySnapshot(snapshot)
+    return snapshot?.data ?? emptyWorkspace
+  }
+
+  async function commit(update: (current: Planning) => Planning | null) {
     try {
-      const next = update(readPlanning(storageKey))
-      if (!next) return 'conflict'
-      localStorage.setItem(storageKey, JSON.stringify(next))
-      setData(next)
-      return 'saved'
-    } catch {
-      notice('Impossible d’enregistrer les données dans ce navigateur.')
+      if (!shared) {
+        const next = update(readPlanning(storageKey))
+        if (!next) return 'conflict'
+        localStorage.setItem(storageKey, JSON.stringify(next))
+        setData(next)
+        return 'saved'
+      }
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const snapshot = await sharedPlanningRequest()
+        if (!snapshot) break
+        applySnapshot(snapshot)
+        const next = update(snapshot.data ?? emptyWorkspace)
+        if (!next) return 'conflict'
+
+        const saved = await sharedPlanningRequest({ revision: snapshot.revision, data: next })
+        if (saved) {
+          applySnapshot(saved)
+          return 'saved'
+        }
+      }
+      notice('Le planning a changé plusieurs fois. Réessaie.')
+      return 'error'
+    } catch (error) {
+      notice(shared && error instanceof Error ? error.message : 'Impossible d’enregistrer les données.')
       return 'error'
     }
   }
 
-  function savePost(target: Extract<Editor, { type: 'post' }>, post: Post, message?: string) {
+  async function importPreviousPlanning() {
+    if (importing) return
+    setImporting(true)
+    try {
+      const saved = await sharedPlanningRequest({ revision: 0, data: readPlanning(storageKey) })
+      if (saved) {
+        applySnapshot(saved)
+        notice('Ton ancien planning est maintenant partagé.')
+      } else {
+        await readCurrent()
+        notice('Le planning partagé est déjà initialisé.')
+      }
+    } catch (error) {
+      notice(error instanceof Error ? error.message : 'Import impossible.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  async function savePost(target: Extract<Editor, { type: 'post' }>, post: Post, message?: string) {
     const key = postKey(target.date, target.account, target.slot)
     const filled = Boolean(post.count || post.caption || post.url || post.owner)
-    const result = commit(current => {
+    const result = await commit(current => {
       const posts = { ...current.posts }
       if (filled) posts[key] = post
       else delete posts[key]
@@ -289,12 +381,14 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
     if (result === 'saved') {
       setEditor(null)
       notice(message || (filled ? 'Créneau enregistré.' : 'Créneau vidé.'))
+      return ''
     }
+    return 'Impossible d’enregistrer ce créneau. Réessaie.'
   }
 
-  function saveAccount(previous: Account | undefined, name: string, handle: string, modelId: string) {
+  async function saveAccount(previous: Account | undefined, name: string, handle: string, modelId: string) {
     let conflict = 'Cet identifiant est déjà utilisé.'
-    const result = commit(current => {
+    const result = await commit(current => {
       const duplicate = current.accounts.some(account =>
         account.id !== previous?.id && account.handle.toLowerCase() === handle.toLowerCase())
       if (duplicate) return null
@@ -312,12 +406,12 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
       setEditor(null)
       notice('Compte enregistré.')
     }
-    if (result === 'error') return 'Impossible d’enregistrer ce compte dans ce navigateur.'
+    if (result === 'error') return 'Impossible d’enregistrer ce compte dans le planning.'
     return result === 'conflict' ? conflict : ''
   }
 
-  function saveModel(name: string, model?: Model) {
-    const result = commit(current => {
+  async function saveModel(name: string, model?: Model) {
+    const result = await commit(current => {
       if (current.models.some(item => item.id !== model?.id && item.name.toLowerCase() === name.toLowerCase())) return null
       if (model && !current.models.some(item => item.id === model.id)) return null
 
@@ -331,12 +425,12 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
       setEditor(null)
       notice('Modèle enregistré.')
     }
-    if (result === 'error') return 'Impossible d’enregistrer ce modèle dans ce navigateur.'
+    if (result === 'error') return 'Impossible d’enregistrer ce modèle dans le planning.'
     return result === 'conflict' ? 'Le nom est déjà utilisé ou le modèle a été supprimé.' : ''
   }
 
-  function removeModel(model: Model) {
-    const result = commit(current => {
+  async function removeModel(model: Model) {
+    const result = await commit(current => {
       if (current.accounts.some(account => account.modelId === model.id)) return null
       return { ...current, models: current.models.filter(item => item.id !== model.id) }
     })
@@ -344,7 +438,7 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
       setEditor(null)
       notice('Modèle supprimé.')
     }
-    if (result === 'error') return 'Impossible de supprimer ce modèle dans ce navigateur.'
+    if (result === 'error') return 'Impossible de supprimer ce modèle dans le planning.'
     return result === 'conflict' ? 'Rattache d’abord les comptes de ce modèle à un autre groupe.' : ''
   }
 
@@ -354,7 +448,7 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
     try {
       url = await canonicalPublication(fields.url)
       if (publicationKey(url).startsWith('threads:post:')) {
-        const oldShares = readPlanning(storageKey).references.filter(reference => reference.id !== id
+        const oldShares = (await readCurrent()).references.filter(reference => reference.id !== id
           && publicationKey(reference.url).startsWith('threads:share:'))
         for (const reference of oldShares) {
           try {
@@ -371,7 +465,7 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
 
     const key = publicationKey(url)
     let conflict = 'Cette publication n’est plus disponible dans la liste.'
-    const result = commit(current => {
+    const result = await commit(current => {
       if (id && !current.references.some(reference => reference.id === id)) return null
 
       const duplicate = current.references.some(reference => reference.id !== id
@@ -403,8 +497,8 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
     return result === 'conflict' ? conflict : 'Impossible d’enregistrer cette publication.'
   }
 
-  function removeReference(id: string) {
-    const result = commit(current => ({
+  async function removeReference(id: string) {
+    const result = await commit(current => ({
       ...current,
       references: current.references.filter(reference => reference.id !== id),
       captionUses: current.captionUses.filter(use => use.referenceId !== id),
@@ -412,9 +506,9 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
     if (result === 'saved') notice('Publication de référence supprimée.')
   }
 
-  function useCaption(reference: TylanReference, target: CaptionTarget) {
+  async function useCaption(reference: TylanReference, target: CaptionTarget) {
     let conflict = ''
-    const result = commit(current => {
+    const result = await commit(current => {
       const source = current.references.find(item => item.id === reference.id)
       if (!source?.caption || source.caption !== reference.caption) {
         conflict = 'La légende a changé. Ferme la fenêtre et ouvre de nouveau la fiche.'
@@ -449,7 +543,17 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
       notice('Légende ajoutée au planning.')
       return ''
     }
-    return conflict || 'Impossible d’enregistrer cette utilisation dans ce navigateur.'
+    return conflict || 'Impossible d’enregistrer cette utilisation dans le planning.'
+  }
+
+  if (shared && revision === null) {
+    return <main className="auth-page">
+      <section className="settings auth-card">
+        <h2>Planning partagé</h2>
+        <p role={syncError ? 'alert' : 'status'}>{syncError || 'Chargement du planning partagé…'}</p>
+        <button className="btn" onClick={onLogout}>Se déconnecter</button>
+      </section>
+    </main>
   }
 
   const modelIds = new Set(data.models.map(model => model.id))
@@ -477,9 +581,16 @@ export function App({ storageKey, email, isAdmin, onLogout }: {
         <span className="sub">{email}</span>
         <button className="btn" type="button" onClick={onLogout}>Se déconnecter</button>
       </div>
-      <div className="aside-foot"><span className="dot" /><span>Données enregistrées<br />dans ce navigateur</span></div>
+      <div className="aside-foot"><span className="dot" /><span>{shared ? 'Planning partagé avec l’équipe' : 'Données enregistrées dans ce navigateur'}</span></div>
     </aside>
     <main>
+      {syncError && <p className="empty" role="status">{syncError} La synchronisation reprendra automatiquement.</p>}
+      {shared && revision === 0 && isAdmin && initial.hasSavedData && <div className="section-head">
+        <p className="sub">Un ancien planning est disponible dans ce navigateur.</p>
+        <button className="btn" disabled={importing} onClick={() => {
+          if (window.confirm('Rendre ce planning accessible à tous les comptes approuvés ?')) void importPreviousPlanning()
+        }}>Importer mon ancien planning</button>
+      </div>}
       {page === 'planning' ? <>
         <header className="top">
           <div><p className="eyebrow">Gestion des publications</p><h1>Planning des publications</h1>
