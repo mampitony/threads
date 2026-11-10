@@ -38,7 +38,7 @@ Le formulaire remplit la légende, le nombre de J’aime et le champ Auteur avec
 
 Une publication Threads est identifiée par son code. Les liens de partage sont résolus avant l’enregistrement dans Scrapping Tylan. Si un ancien lien de partage n’est plus accessible, corrige son adresse ou supprime sa fiche pour vérifier les nouvelles fiches Threads. Le bouton **Supprimer** retire la fiche et son suivi dans Scrapping Tylan. Une légende déjà copiée reste dans le planning.
 
-Dans le planning, enregistre la légende seule si le post n’est pas encore publié. Une fois publié, ajoute son lien Threads au même créneau et enregistre. Le serveur tente alors de récupérer les J’aime et les commentaires directs. Les compteurs disponibles s’affichent dans la carte et sont inclus dans le CSV. Le créneau reste enregistrable si Threads ou ScrapeAtlas ne renvoie pas les compteurs.
+Dans le planning, colle un lien Threads dans le créneau. La légende, les J’aime et les commentaires directs se chargent avant l’enregistrement. Le compteur de posts vaut 1 si tu laisses ce champ vide et enregistres un lien. Le bouton **Actualiser les données du post** permet de relancer la récupération. Tu peux encore enregistrer une légende seule ou compléter les champs manuellement si certaines données manquent. Les compteurs disponibles s’affichent sur la carte et dans le CSV.
 
 ## Compiler le projet
 

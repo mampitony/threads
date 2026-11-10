@@ -3,7 +3,7 @@ import type { PlanningSnapshot } from './sharedPlanning'
 import { PendingAccounts } from './PendingAccounts'
 import { canonicalPublication, lookupThreads, publicationKey, threadsLink } from './threads'
 import { useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 import { Modal } from './Modal'
 import { Tylan } from './Tylan'
 import { AccountGroup, ModelEditor } from './Models'
@@ -71,7 +71,9 @@ function AccountCard({ account, date, posts, onEdit }: {
   onEdit: (slot: Slot) => void
 }) {
   const initials = account.name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase()
-  return <article className="account">
+  const accountHue = Array.from(account.id).reduce((hash, char) => Math.imul(hash, 31) + char.charCodeAt(0) | 0, 0)
+  const hue = (Math.imul(accountHue, 137) >>> 0) % 360
+  return <article className="account" style={{ '--account-hue': hue } as CSSProperties}>
     <header className="account-head">
       <span className="avatar" aria-hidden="true">{initials}</span>
       <div><h3>{account.name}</h3><p className="handle">@{account.handle}</p></div>
@@ -113,49 +115,94 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
   post?: Post
   owners: string[]
   onClose: () => void
-  onSave: (post: Post, message?: string) => Promise<string>
+  onSave: (post: Post) => Promise<string>
 }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [url, setUrl] = useState(post?.url ?? '')
+  const [caption, setCaption] = useState(post?.caption ?? '')
+  const [request, setRequest] = useState<{ url: string } | null>(null)
+  const [lookup, setLookup] = useState<{ url: string; likes?: number; comments?: number; message: string; failed?: boolean } | null>(null)
+  const importedCaption = useRef(false)
+  const captionEdited = useRef(false)
+  const loading = request !== null
+
+  function queueLookup(link: string) {
+    captionEdited.current = false
+    setLookup(null)
+    setRequest({ url: link })
+  }
+
+  useEffect(() => {
+    if (!request) return
+    const controller = new AbortController()
+    const delay = window.setTimeout(async () => {
+      try {
+        const result = await lookupThreads(request.url, false, controller.signal)
+        if (controller.signal.aborted) return
+        const receivedCaption = Boolean(result.caption?.trim())
+        const fillCaption = receivedCaption && !captionEdited.current
+        if (fillCaption && result.caption) {
+          setCaption(result.caption.trim())
+          importedCaption.current = true
+        }
+        const missing = [
+          !receivedCaption && 'légende',
+          result.likes == null && 'J’aime',
+          result.comments == null && 'commentaires',
+        ].filter(Boolean)
+        setLookup({
+          url: request.url, likes: result.likes ?? undefined, comments: result.comments ?? undefined,
+          message: [
+            missing.length ? 'Champs indisponibles (' + missing.join(', ') + ').' : 'Légende et compteurs récupérés.',
+            receivedCaption && !fillCaption ? 'Ta légende saisie a été conservée.' : '',
+          ].filter(Boolean).join(' '),
+        })
+      } catch (failure) {
+        if (controller.signal.aborted) return
+        setLookup({
+          url: request.url, failed: true,
+          message: failure instanceof Error && failure.name === 'Error'
+            ? failure.message : 'Impossible de récupérer les données. Tu peux compléter le créneau manuellement.',
+        })
+      } finally {
+        if (!controller.signal.aborted) setRequest(null)
+      }
+    }, 450)
+    return () => {
+      window.clearTimeout(delay)
+      controller.abort()
+    }
+  }, [request])
+
+  const link = url.trim()
+  const canLookup = Boolean(threadsLink(link) && publicationKey(link).startsWith('threads:'))
+  const currentLookup = lookup?.url === link ? lookup : null
+  const likes = currentLookup?.likes ?? (link && link === post?.url ? post.likes : undefined)
+  const comments = currentLookup?.comments ?? (link && link === post?.url ? post.comments : undefined)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (saving) return
+    if (saving || loading) return
     const form = event.currentTarget
     const values = new FormData(form)
     const rawCount = String(values.get('count')).trim()
-    const next: Post = {
-      count: rawCount ? String(Number(rawCount)) : '',
-      caption: String(values.get('caption')).trim(),
-      url: String(values.get('url')).trim(),
-      owner: String(values.get('owner')).trim(),
-    }
-    const url = form.elements.namedItem('url') as HTMLInputElement
-    if (next.url && !webUrl(next.url)) {
-      url.setCustomValidity('Utilise une adresse commençant par http:// ou https://.')
-      url.reportValidity()
+    if (link && !webUrl(link)) {
+      const input = form.elements.namedItem('url') as HTMLInputElement
+      input.setCustomValidity('Utilise une adresse commençant par http:// ou https://.')
+      input.reportValidity()
       return
     }
-    if (next.url && next.url === post?.url) {
-      next.likes = post.likes
-      next.comments = post.comments
+    const next: Post = {
+      count: rawCount ? String(Number(rawCount)) : link ? '1' : '',
+      caption: caption.trim(),
+      url: link,
+      owner: String(values.get('owner')).trim(),
+      likes,
+      comments,
     }
-    let message = ''
     setSaving(true)
-    setError('')
-    if (threadsLink(next.url)) {
-      try {
-        const stats = await lookupThreads(next.url)
-        if (stats.likes != null) next.likes = stats.likes
-        if (stats.comments != null) next.comments = stats.comments
-        if (stats.likes == null || stats.comments == null) {
-          message = 'Créneau enregistré. Certaines statistiques Threads sont indisponibles.'
-        }
-      } catch {
-        message = 'Créneau enregistré. Statistiques indisponibles, tu peux réessayer en enregistrant de nouveau.'
-      }
-    }
-    setError(await onSave(next, message))
+    setError(await onSave(next))
     setSaving(false)
   }
 
@@ -163,12 +210,42 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
     <p className="sub">{account.name} · {slot} · {formatDate(fromKey(date), {
       day: 'numeric', month: 'long', year: 'numeric',
     })}</p>
-    <p className="sub">Enregistre la légende dès maintenant. Ajoute le lien Threads après publication pour relever les J’aime et les commentaires.</p>
+    <p className="sub">Colle le lien Threads pour remplir le créneau. Tu peux aussi préparer une légende sans lien.</p>
     <form onSubmit={submit}>
-      <label>Nombre de posts<input name="count" disabled={saving} type="number" min="0" max="999999" step="1" placeholder="0" defaultValue={post?.count} /></label>
-      <label>Légende +1K<textarea name="caption" disabled={saving} maxLength={5000} placeholder="Saisir une légende" defaultValue={post?.caption} /></label>
-      <label>Lien du post<input name="url" disabled={saving} type="url" maxLength={2000} placeholder="https://…" defaultValue={post?.url}
-        onInput={event => event.currentTarget.setCustomValidity('')} /></label>
+      <label>Lien du post<input name="url" disabled={saving} type="url" maxLength={2000}
+        placeholder="https://www.threads.com/…" value={url} onChange={event => {
+          event.currentTarget.setCustomValidity('')
+          const nextUrl = event.target.value
+          const nextLink = nextUrl.trim()
+          setUrl(nextUrl)
+          if (nextLink === link) return
+          if (importedCaption.current) {
+            setCaption(post?.caption ?? '')
+            importedCaption.current = false
+          }
+          if (threadsLink(nextLink) && publicationKey(nextLink).startsWith('threads:')) queueLookup(nextLink)
+          else {
+            setRequest(null)
+            setLookup(null)
+          }
+        }} /></label>
+      {canLookup && <button className="btn post-lookup" type="button" disabled={loading || saving}
+        onClick={() => queueLookup(link)}>Actualiser les données du post</button>}
+      {loading && <p className="sub" role="status">Récupération de la légende et des compteurs…</p>}
+      {currentLookup && <p className={currentLookup.failed ? 'form-error' : 'sub'}
+        role={currentLookup.failed ? 'alert' : 'status'}>{currentLookup.message}</p>}
+      {(likes !== undefined || comments !== undefined) && <div className="post-metrics">
+        <span><strong>{likes ?? '—'}</strong> J’aime</span>
+        <span><strong>{comments ?? '—'}</strong> commentaires</span>
+      </div>}
+      <label>Légende +1K<textarea name="caption" disabled={saving} maxLength={5000} placeholder="Saisir une légende"
+        value={caption} onChange={event => {
+          captionEdited.current = true
+          importedCaption.current = false
+          setCaption(event.target.value)
+        }} /></label>
+      <label>Nombre de posts<input name="count" disabled={saving} type="number" min="0" max="999999" step="1"
+        placeholder={link ? '1' : '0'} defaultValue={post?.count} /></label>
       <label>Responsable<input name="owner" disabled={saving} maxLength={100} list="owners" placeholder="Saisir ou choisir un nom" defaultValue={post?.owner} /></label>
       <datalist id="owners">{owners.map(owner => <option key={owner} value={owner} />)}</datalist>
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -180,7 +257,7 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
           setSaving(false)
         }}>Effacer</button>}
         <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
-        <button className="btn primary" type="submit" disabled={saving}>{saving ? 'Récupération…' : 'Enregistrer'}</button>
+        <button className="btn primary" type="submit" disabled={saving || loading}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
       </div>
     </form>
   </Modal>
@@ -369,7 +446,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     }
   }
 
-  async function savePost(target: Extract<Editor, { type: 'post' }>, post: Post, message?: string) {
+  async function savePost(target: Extract<Editor, { type: 'post' }>, post: Post) {
     const key = postKey(target.date, target.account, target.slot)
     const filled = Boolean(post.count || post.caption || post.url || post.owner)
     const result = await commit(current => {
@@ -380,7 +457,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     })
     if (result === 'saved') {
       setEditor(null)
-      notice(message || (filled ? 'Créneau enregistré.' : 'Créneau vidé.'))
+      notice(filled ? 'Créneau enregistré.' : 'Créneau vidé.')
       return ''
     }
     return 'Impossible d’enregistrer ce créneau. Réessaie.'
@@ -652,7 +729,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     {editor?.type === 'post' && <PostEditor account={editor.account} slot={editor.slot} date={editor.date}
       post={data.posts[postKey(editor.date, editor.account, editor.slot)]}
       owners={[...new Set(Object.values(data.posts).map(post => post.owner).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'))}
-      onClose={() => setEditor(null)} onSave={(post, message) => savePost(editor, post, message)} />}
+      onClose={() => setEditor(null)} onSave={post => savePost(editor, post)} />}
     {editor?.type === 'account' && <AccountEditor account={editor.account} models={data.models} modelId={editor.modelId}
       onClose={() => setEditor(null)} onSave={(name, handle, modelId) => saveAccount(editor.account, name, handle, modelId)} />}
     {editor?.type === 'model' && <ModelEditor model={editor.model}

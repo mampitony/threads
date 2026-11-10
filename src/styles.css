@@ -335,8 +335,9 @@ h3 {
 
 .account {
   min-width: 0;
-  background: #fff;
-  border: 1px solid var(--line);
+  background: hsl(var(--account-hue) 50% 99%);
+  border: 1px solid hsl(var(--account-hue) 28% 83%);
+  border-top: 3px solid hsl(var(--account-hue) 48% 48%);
   border-radius: 14px;
   overflow: hidden;
 }
@@ -344,7 +345,8 @@ h3 {
 .account-head {
   padding: 15px;
   justify-content: flex-start;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid hsl(var(--account-hue) 30% 87%);
+  background: hsl(var(--account-hue) 52% 94%);
 }
 
 .avatar {
@@ -356,18 +358,47 @@ h3 {
   place-items: center;
   font-weight: 750;
   font-size: 12px;
-  color: #315a45;
-  background: #e8f0e1;
+  color: hsl(var(--account-hue) 48% 23%);
+  background: hsl(var(--account-hue) 52% 85%);
 }
 
-.account:nth-child(3n+2) .avatar {
-  background: #f1e8f7;
-  color: #694c7a;
+.account .edit {
+  color: hsl(var(--account-hue) 48% 23%);
+  background: hsl(var(--account-hue) 48% 93%);
 }
 
-.account:nth-child(3n+3) .avatar {
-  background: #f7eddd;
-  color: #755d3c;
+.account .edit:hover {
+  background: hsl(var(--account-hue) 48% 86%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .account {
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .account:hover,
+  .account:focus-within {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px hsl(var(--account-hue) 26% 27% / 12%);
+  }
+}
+
+.post-lookup {
+  justify-self: start;
+}
+
+.post-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.post-metrics span {
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 13px;
 }
 
 .handle {
