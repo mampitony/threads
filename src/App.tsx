@@ -64,10 +64,63 @@ function WeekPicker({ selected, onSelect }: { selected: string; onSelect: (day: 
   </section>
 }
 
-function AccountCard({ account, date, posts, onEdit }: {
+type PostMetrics = Pick<Post, 'likes' | 'comments'>
+
+function useLivePostMetrics(urlsJson: string) {
+  const [metrics, setMetrics] = useState<Record<string, PostMetrics>>({})
+
+  useEffect(() => {
+    const urls: string[] = JSON.parse(urlsJson)
+    if (urls.length === 0) return
+
+    const controller = new AbortController()
+    let refreshing = false
+
+    async function refresh() {
+      if (refreshing || document.hidden || controller.signal.aborted) return
+      refreshing = true
+      try {
+        for (let index = 0; index < urls.length; index += 3) {
+          if (document.hidden || controller.signal.aborted) break
+          await Promise.all(urls.slice(index, index + 3).map(async url => {
+            try {
+              const result = await lookupThreads(url, false, controller.signal)
+              if (controller.signal.aborted || (result.likes == null && result.comments == null)) return
+              setMetrics(current => ({
+                ...current,
+                [url]: {
+                  likes: result.likes ?? current[url]?.likes,
+                  comments: result.comments ?? current[url]?.comments,
+                },
+              }))
+            } catch {
+              // Keep the last available counts and retry on the next refresh.
+            }
+          }))
+        }
+      } finally {
+        refreshing = false
+      }
+    }
+
+    void refresh()
+    const interval = window.setInterval(refresh, 60_000)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      controller.abort()
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [urlsJson])
+
+  return metrics
+}
+
+function AccountCard({ account, date, posts, liveMetrics, onEdit }: {
   account: Account
   date: string
   posts: Planning['posts']
+  liveMetrics: Record<string, PostMetrics>
   onEdit: (slot: Slot) => void
 }) {
   const initials = account.name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase()
@@ -82,6 +135,8 @@ function AccountCard({ account, date, posts, onEdit }: {
       {slots.map(slot => {
         const post = posts[postKey(date, account, slot)]
         const url = post ? webUrl(post.url) : ''
+        const likes = liveMetrics[url]?.likes ?? post?.likes
+        const comments = liveMetrics[url]?.comments ?? post?.comments
         const count = post?.count ? post.count + (Number(post.count) === 1 ? ' post' : ' posts') : ''
         const details = [count, post?.owner].filter(Boolean).join(' · ')
         const action = post ? 'Modifier' : 'Saisir'
@@ -93,10 +148,10 @@ function AccountCard({ account, date, posts, onEdit }: {
           </div>
           {post ? <>
             {details && <div className="slot-detail">{details}</div>}
-            {(post.likes != null || post.comments != null) && <div className="slot-detail">
+            {(likes != null || comments != null) && <div className="slot-detail">
               {[
-                post.likes != null ? post.likes + ' J’aime' : '',
-                post.comments != null ? post.comments + (post.comments === 1 ? ' commentaire' : ' commentaires') : '',
+                likes != null ? likes + ' J’aime' : '',
+                comments != null ? comments + (comments === 1 ? ' commentaire' : ' commentaires') : '',
               ].filter(Boolean).join(' · ')}
             </div>}
             {post.caption && <div className="slot-detail caption">{post.caption}</div>}
@@ -623,16 +678,6 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     return conflict || 'Impossible d’enregistrer cette utilisation dans le planning.'
   }
 
-  if (shared && revision === null) {
-    return <main className="auth-page">
-      <section className="settings auth-card">
-        <h2>Planning partagé</h2>
-        <p role={syncError ? 'alert' : 'status'}>{syncError || 'Chargement du planning partagé…'}</p>
-        <button className="btn" onClick={onLogout}>Se déconnecter</button>
-      </section>
-    </main>
-  }
-
   const modelIds = new Set(data.models.map(model => model.id))
   const activeModel = modelFilter === 'unassigned' || modelIds.has(modelFilter) ? modelFilter : ''
   const unassigned = data.accounts.filter(account => !account.modelId || !modelIds.has(account.modelId))
@@ -642,6 +687,21 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const accounts = modelAccounts.filter(account => !activeFilter || account.id === activeFilter)
   const posts = accounts.flatMap(account => slots
     .map(slot => data.posts[postKey(selected, account, slot)]).filter(Boolean))
+  const planningReady = !shared || revision !== null
+  const threadsUrls = page === 'planning' && planningReady
+    ? posts.map(post => webUrl(post.url)).filter(url => threadsLink(url) && publicationKey(url).startsWith('threads:'))
+    : []
+  const liveMetrics = useLivePostMetrics(JSON.stringify([...new Set(threadsUrls)].sort()))
+
+  if (!planningReady) {
+    return <main className="auth-page">
+      <section className="settings auth-card">
+        <h2>Planning partagé</h2>
+        <p role={syncError ? 'alert' : 'status'}>{syncError || 'Chargement du planning partagé…'}</p>
+        <button className="btn" onClick={onLogout}>Se déconnecter</button>
+      </section>
+    </main>
+  }
 
   return <div className="layout">
     <header className="app-banner">GESTION DE PUBLICATIONS</header>
@@ -696,7 +756,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           </div>
           {accounts.length === 0 && <p className="empty">Aucun compte pour ce modèle.</p>}
           <div className="accounts">
-            {accounts.map(account => <AccountCard key={account.id} account={account} date={selected} posts={data.posts}
+            {accounts.map(account => <AccountCard key={account.id} account={account} date={selected} posts={data.posts} liveMetrics={liveMetrics}
               onEdit={slot => setEditor({ type: 'post', account, slot, date: selected })} />)}
           </div>
         </section>
