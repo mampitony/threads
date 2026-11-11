@@ -644,6 +644,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     .map(slot => data.posts[postKey(selected, account, slot)]).filter(Boolean))
 
   return <div className="layout">
+    <header className="app-banner">Planning de Publications sur Threads</header>
     <aside>
       <div className="brand"><span className="brand-icon"><Icon name="calendar" /></span>Plan de posts</div>
       <nav aria-label="Navigation principale">
