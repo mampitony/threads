@@ -48,6 +48,9 @@ a {
 }
 
 .layout {
+  --banner-font-size: clamp(1rem, 2.4vw, 1.375rem);
+  --banner-line-height: calc(var(--banner-font-size) * 1.35);
+  --banner-height: calc(var(--banner-line-height) + 29px);
   min-height: 100vh;
   display: grid;
   grid-template-columns: 232px minmax(0,1fr);
@@ -55,15 +58,33 @@ a {
 }
 
 .app-banner {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   grid-column: 1 / -1;
   padding: 14px 20px;
   background: #e8f3ff;
   border-bottom: 1px solid #c9dff4;
   color: #173b60;
-  font-size: clamp(1rem, 2.4vw, 1.375rem);
+  font-size: var(--banner-font-size);
   font-weight: 750;
-  line-height: 1.35;
+  line-height: var(--banner-line-height);
   text-align: center;
+}
+
+.layout > aside {
+  position: sticky;
+  top: var(--banner-height);
+  z-index: 2;
+  align-self: start;
+  max-height: calc(100dvh - var(--banner-height));
+  overflow-y: auto;
+}
+
+@media (min-width: 851px) {
+  .layout > aside {
+    height: calc(100dvh - var(--banner-height));
+  }
 }
 
 aside {
