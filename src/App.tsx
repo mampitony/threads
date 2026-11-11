@@ -65,7 +65,7 @@ function WeekPicker({ selected, onSelect }: { selected: string; onSelect: (day: 
   </section>
 }
 
-type PostMetrics = Pick<Post, 'likes' | 'comments'>
+type PostMetrics = Pick<Post, 'likes' | 'comments'> & { imageUrl?: string | null }
 
 function useLivePostMetrics(urlsJson: string) {
   const [metrics, setMetrics] = useState<Record<string, PostMetrics>>({})
@@ -86,12 +86,13 @@ function useLivePostMetrics(urlsJson: string) {
           await Promise.all(urls.slice(index, index + 3).map(async url => {
             try {
               const result = await lookupThreads(url, false, controller.signal)
-              if (controller.signal.aborted || (result.likes == null && result.comments == null)) return
+              if (controller.signal.aborted) return
               setMetrics(current => ({
                 ...current,
                 [url]: {
                   likes: result.likes ?? current[url]?.likes,
                   comments: result.comments ?? current[url]?.comments,
+                  imageUrl: result.imageUrl ?? current[url]?.imageUrl,
                 },
               }))
             } catch {
@@ -456,7 +457,7 @@ function Dashboard({ data, date, metrics, onSuggest }: {
     if (!url) return []
     const likes = metrics[url]?.likes ?? post.likes
     const comments = metrics[url]?.comments ?? post.comments
-    return [{ key, account, slot, url, caption: post.caption, likes, comments,
+    return [{ key, account, slot, url, caption: post.caption, likes, comments, imageUrl: metrics[url]?.imageUrl,
       total: (likes ?? 0) + (comments ?? 0) }]
   }))
   const ranked = publications.filter(post => post.likes != null || post.comments != null)
@@ -479,15 +480,20 @@ function Dashboard({ data, date, metrics, onSuggest }: {
       {ranked.length > 0 && <ol className="account-list">
         {ranked.map((post, index) => {
           const recipients = post.total > 0 ? captionRecipients(data, post.caption, post.account.id) : []
-          return <li key={post.key} style={{ display: 'block' }}>
-            <strong>{index + 1}. {post.account.name} · {post.slot} · {post.total} interactions relevées</strong>
-            <p className="sub">{post.likes ?? '—'} J’aime · {post.comments ?? '—'} commentaires</p>
-            {post.caption && <p className="caption">{post.caption}</p>}
-            <div className="account-actions">
-              <a className="btn" href={post.url} target="_blank" rel="noopener noreferrer">Ouvrir le post ↗</a>
-              {recipients.length > 0 && <button className="btn" onClick={() => onSuggest(post.key, post.caption, post.account.id)}>
-                Réutiliser la légende ({recipients.length} {recipients.length === 1 ? 'compte' : 'comptes'})
-              </button>}
+          return <li key={post.key} style={{ justifyContent: 'flex-start', alignItems: 'flex-start', gap: 16 }}>
+            {post.imageUrl && <img key={post.imageUrl} src={post.imageUrl} alt={'Aperçu du post de ' + post.account.name}
+              loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={event => { event.currentTarget.hidden = true }}
+              style={{ width: 'clamp(64px, 17vw, 120px)', aspectRatio: '1', flexShrink: 0, objectFit: 'cover', borderRadius: 8 }} />}
+            <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+              <strong>{index + 1}. {post.account.name} · {post.slot} · {post.total} interactions relevées</strong>
+              <p className="sub">{post.likes ?? '—'} J’aime · {post.comments ?? '—'} commentaires</p>
+              {post.caption && <p className="caption">{post.caption}</p>}
+              <div className="account-actions">
+                <a className="btn" href={post.url} target="_blank" rel="noopener noreferrer">Ouvrir le post ↗</a>
+                {recipients.length > 0 && <button className="btn" onClick={() => onSuggest(post.key, post.caption, post.account.id)}>
+                  Réutiliser la légende ({recipients.length} {recipients.length === 1 ? 'compte' : 'comptes'})
+                </button>}
+              </div>
             </div>
           </li>
         })}
@@ -518,7 +524,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const [selected, setSelected] = useState('2026-11-10')
   const [filter, setFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
-  const [page, setPage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals'>('planning')
+  const [page, setPage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals'>('dashboard')
   const [editor, setEditor] = useState<Editor | null>(null)
   const [message, setMessage] = useState(initial.error)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -871,8 +877,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       <div className="brand"><span className="brand-icon"><Icon name="calendar" /></span>Plan de posts</div>
       <nav aria-label="Navigation principale">
         <span className="nav-label">Espace de travail</span>
-        <button aria-current={page === 'planning' ? 'page' : undefined} onClick={() => setPage('planning')}><Icon name="calendar" />Planning</button>
         <button aria-current={page === 'dashboard' ? 'page' : undefined} onClick={() => setPage('dashboard')}><Icon name="stats" />Tableau de bord</button>
+        <button aria-current={page === 'planning' ? 'page' : undefined} onClick={() => setPage('planning')}><Icon name="calendar" />Planning</button>
         <button aria-current={page === 'accounts' ? 'page' : undefined} onClick={() => setPage('accounts')}><Icon name="people" />Comptes</button>
         <button aria-current={page === 'tylan' ? 'page' : undefined} onClick={() => setPage('tylan')}><Icon name="references" />Scrapping Tylan</button>
         {isAdmin && <button aria-current={page === 'approvals' ? 'page' : undefined}
