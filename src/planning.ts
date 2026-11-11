@@ -2,7 +2,7 @@ export const slots = ['Matin', 'Midi', 'Soir'] as const
 export type Slot = typeof slots[number]
 export type Account = { id: string; name: string; handle: string; modelId?: string }
 export type Model = { id: string; name: string }
-export type Post = { count: string; caption: string; url: string; owner: string; likes?: number; comments?: number }
+export type Post = { count: string; caption: string; url: string; owner: string; likes?: number; comments?: number; imageUrl?: string }
 export type TylanReference = {
   id: string
   caption: string

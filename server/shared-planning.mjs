@@ -15,7 +15,9 @@ function validPlanning(data) {
     && Array.isArray(data.models) && data.models.every(item => object(item) && text(item.id) && text(item.name))
     && object(data.posts) && Object.values(data.posts).every(item =>
       object(item) && text(item.count) && text(item.caption) && text(item.url) && text(item.owner)
-      && optionalCount(item.likes) && optionalCount(item.comments))
+      && optionalCount(item.likes) && optionalCount(item.comments)
+      && (item.imageUrl === undefined || (webLink(item.imageUrl) && item.imageUrl.length <= 2000
+        && new URL(item.imageUrl).protocol === 'https:')))
     && Array.isArray(data.references) && data.references.every(item =>
       object(item) && text(item.id) && text(item.caption) && text(item.author) && webLink(item.url)
       && count(item.reactions) && text(item.agent))

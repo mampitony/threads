@@ -1,7 +1,7 @@
 import { sharedPlanningRequest } from './sharedPlanning'
 import type { PlanningSnapshot } from './sharedPlanning'
 import { PendingAccounts } from './PendingAccounts'
-import { canonicalPublication, lookupThreads, publicationKey, threadsLink } from './threads'
+import { canonicalPublication, publicationKey } from './threads'
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { Modal } from './Modal'
@@ -65,64 +65,10 @@ function WeekPicker({ selected, onSelect }: { selected: string; onSelect: (day: 
   </section>
 }
 
-type PostMetrics = Pick<Post, 'likes' | 'comments'> & { imageUrl?: string | null }
-
-function useLivePostMetrics(urlsJson: string) {
-  const [metrics, setMetrics] = useState<Record<string, PostMetrics>>({})
-
-  useEffect(() => {
-    const urls: string[] = JSON.parse(urlsJson)
-    if (urls.length === 0) return
-
-    const controller = new AbortController()
-    let refreshing = false
-
-    async function refresh() {
-      if (refreshing || document.hidden || controller.signal.aborted) return
-      refreshing = true
-      try {
-        for (let index = 0; index < urls.length; index += 3) {
-          if (document.hidden || controller.signal.aborted) break
-          await Promise.all(urls.slice(index, index + 3).map(async url => {
-            try {
-              const result = await lookupThreads(url, false, controller.signal)
-              if (controller.signal.aborted) return
-              setMetrics(current => ({
-                ...current,
-                [url]: {
-                  likes: result.likes ?? current[url]?.likes,
-                  comments: result.comments ?? current[url]?.comments,
-                  imageUrl: result.imageUrl ?? current[url]?.imageUrl,
-                },
-              }))
-            } catch {
-              // Keep the last available counts and retry on the next refresh.
-            }
-          }))
-        }
-      } finally {
-        refreshing = false
-      }
-    }
-
-    void refresh()
-    const interval = window.setInterval(refresh, 60_000)
-    document.addEventListener('visibilitychange', refresh)
-    return () => {
-      controller.abort()
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', refresh)
-    }
-  }, [urlsJson])
-
-  return metrics
-}
-
-function AccountCard({ account, date, posts, liveMetrics, onEdit }: {
+function AccountCard({ account, date, posts, onEdit }: {
   account: Account
   date: string
   posts: Planning['posts']
-  liveMetrics: Record<string, PostMetrics>
   onEdit: (slot: Slot) => void
 }) {
   const initials = account.name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase()
@@ -137,8 +83,8 @@ function AccountCard({ account, date, posts, liveMetrics, onEdit }: {
       {slots.map(slot => {
         const post = posts[postKey(date, account, slot)]
         const url = post ? webUrl(post.url) : ''
-        const likes = liveMetrics[url]?.likes ?? post?.likes
-        const comments = liveMetrics[url]?.comments ?? post?.comments
+        const likes = post?.likes
+        const comments = post?.comments
         const count = post?.count ? post.count + (Number(post.count) === 1 ? ' post' : ' posts') : ''
         const details = [count, post?.owner].filter(Boolean).join(' · ')
         const action = post ? 'Modifier' : 'Saisir'
@@ -177,70 +123,11 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [url, setUrl] = useState(post?.url ?? '')
-  const [caption, setCaption] = useState(post?.caption ?? '')
-  const [request, setRequest] = useState<{ url: string } | null>(null)
-  const [lookup, setLookup] = useState<{ url: string; likes?: number; comments?: number; message: string; failed?: boolean } | null>(null)
-  const importedCaption = useRef(false)
-  const captionEdited = useRef(false)
-  const loading = request !== null
-
-  function queueLookup(link: string) {
-    captionEdited.current = false
-    setLookup(null)
-    setRequest({ url: link })
-  }
-
-  useEffect(() => {
-    if (!request) return
-    const controller = new AbortController()
-    const delay = window.setTimeout(async () => {
-      try {
-        const result = await lookupThreads(request.url, false, controller.signal)
-        if (controller.signal.aborted) return
-        const receivedCaption = Boolean(result.caption?.trim())
-        const fillCaption = receivedCaption && !captionEdited.current
-        if (fillCaption && result.caption) {
-          setCaption(result.caption.trim())
-          importedCaption.current = true
-        }
-        const missing = [
-          !receivedCaption && 'légende',
-          result.likes == null && 'J’aime',
-          result.comments == null && 'commentaires',
-        ].filter(Boolean)
-        setLookup({
-          url: request.url, likes: result.likes ?? undefined, comments: result.comments ?? undefined,
-          message: [
-            missing.length ? 'Champs indisponibles (' + missing.join(', ') + ').' : 'Légende et compteurs récupérés.',
-            receivedCaption && !fillCaption ? 'Ta légende saisie a été conservée.' : '',
-          ].filter(Boolean).join(' '),
-        })
-      } catch (failure) {
-        if (controller.signal.aborted) return
-        setLookup({
-          url: request.url, failed: true,
-          message: failure instanceof Error && failure.name === 'Error'
-            ? failure.message : 'Impossible de récupérer les données. Tu peux compléter le créneau manuellement.',
-        })
-      } finally {
-        if (!controller.signal.aborted) setRequest(null)
-      }
-    }, 450)
-    return () => {
-      window.clearTimeout(delay)
-      controller.abort()
-    }
-  }, [request])
-
   const link = url.trim()
-  const canLookup = Boolean(threadsLink(link) && publicationKey(link).startsWith('threads:'))
-  const currentLookup = lookup?.url === link ? lookup : null
-  const likes = currentLookup?.likes ?? (link && link === post?.url ? post.likes : undefined)
-  const comments = currentLookup?.comments ?? (link && link === post?.url ? post.comments : undefined)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (saving || loading) return
+    if (saving) return
     const form = event.currentTarget
     const values = new FormData(form)
     const rawCount = String(values.get('count')).trim()
@@ -250,9 +137,25 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
       input.reportValidity()
       return
     }
+    const readCount = (name: string) => {
+      const value = String(values.get(name) ?? '').trim()
+      return value ? Number(value) : undefined
+    }
+    const likes = readCount('likes')
+    const comments = readCount('comments')
+    if ([likes, comments].some(value => value !== undefined && (!Number.isSafeInteger(value) || value < 0))) {
+      setError('Saisis des compteurs entiers et positifs ou nuls.')
+      return
+    }
+    const imageUrl = String(values.get('imageUrl') ?? '').trim()
+    if (imageUrl && !webUrl(imageUrl).startsWith('https://')) {
+      setError('Utilise une URL d’image directe commençant par https://.')
+      return
+    }
     const next: Post = {
       count: rawCount ? String(Number(rawCount)) : link ? '1' : '',
-      caption: caption.trim(),
+      caption: String(values.get('caption') ?? '').trim(),
+      imageUrl: imageUrl || undefined,
       url: link,
       owner: String(values.get('owner')).trim(),
       likes,
@@ -267,40 +170,22 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
     <p className="sub">{account.name} · {slot} · {formatDate(fromKey(date), {
       day: 'numeric', month: 'long', year: 'numeric',
     })}</p>
-    <p className="sub">Colle le lien Threads pour remplir le créneau. Tu peux aussi préparer une légende sans lien.</p>
+    <p className="sub">Relève les compteurs sur Threads et saisis-les ici.</p>
     <form onSubmit={submit}>
       <label>Lien du post<input name="url" disabled={saving} type="url" maxLength={2000}
         placeholder="https://www.threads.com/…" value={url} onChange={event => {
           event.currentTarget.setCustomValidity('')
-          const nextUrl = event.target.value
-          const nextLink = nextUrl.trim()
-          setUrl(nextUrl)
-          if (nextLink === link) return
-          if (importedCaption.current) {
-            setCaption(post?.caption ?? '')
-            importedCaption.current = false
-          }
-          if (threadsLink(nextLink) && publicationKey(nextLink).startsWith('threads:')) queueLookup(nextLink)
-          else {
-            setRequest(null)
-            setLookup(null)
-          }
+          setUrl(event.target.value)
         }} /></label>
-      {canLookup && <button className="btn post-lookup" type="button" disabled={loading || saving}
-        onClick={() => queueLookup(link)}>Actualiser les données du post</button>}
-      {loading && <p className="sub" role="status">Récupération de la légende et des compteurs…</p>}
-      {currentLookup && <p className={currentLookup.failed ? 'form-error' : 'sub'}
-        role={currentLookup.failed ? 'alert' : 'status'}>{currentLookup.message}</p>}
-      {(likes !== undefined || comments !== undefined) && <div className="post-metrics">
-        <span><strong>{likes ?? '—'}</strong> J’aime</span>
-        <span><strong>{comments ?? '—'}</strong> commentaires</span>
-      </div>}
+      {webUrl(link) && <a href={webUrl(link)} target="_blank" rel="noopener noreferrer">Ouvrir le post ↗</a>}
+      <label>J’aime<input name="likes" disabled={saving} type="number" min="0" max={Number.MAX_SAFE_INTEGER}
+        step="1" defaultValue={post?.likes} /></label>
+      <label>Commentaires<input name="comments" disabled={saving} type="number" min="0" max={Number.MAX_SAFE_INTEGER}
+        step="1" defaultValue={post?.comments} /></label>
+      <label>URL directe de la photo (facultatif)<input name="imageUrl" disabled={saving} type="url" maxLength={2000}
+        placeholder="https://…" defaultValue={post?.imageUrl} /></label>
       <label>Légende +1K<textarea name="caption" disabled={saving} maxLength={5000} placeholder="Saisir une légende"
-        value={caption} onChange={event => {
-          captionEdited.current = true
-          importedCaption.current = false
-          setCaption(event.target.value)
-        }} /></label>
+        defaultValue={post?.caption} /></label>
       <label>Nombre de posts<input name="count" disabled={saving} type="number" min="0" max="999999" step="1"
         placeholder={link ? '1' : '0'} defaultValue={post?.count} /></label>
       <label>Responsable<input name="owner" disabled={saving} maxLength={100} list="owners" placeholder="Saisir ou choisir un nom" defaultValue={post?.owner} /></label>
@@ -314,7 +199,7 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
           setSaving(false)
         }}>Effacer</button>}
         <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
-        <button className="btn primary" type="submit" disabled={saving || loading}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
+        <button className="btn primary" type="submit" disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
       </div>
     </form>
   </Modal>
@@ -444,10 +329,10 @@ function CaptionSuggestion({ data, caption, sourceId, onClose, onSave }: {
   </Modal>
 }
 
-function Dashboard({ data, date, metrics, onSuggest }: {
+function Dashboard({ data, date, onEdit, onSuggest }: {
   data: Planning
   date: string
-  metrics: Record<string, PostMetrics>
+  onEdit: (account: Account, slot: Slot) => void
   onSuggest: (key: string, caption: string, sourceId: string) => void
 }) {
   const publications = data.accounts.flatMap(account => slots.flatMap(slot => {
@@ -455,13 +340,14 @@ function Dashboard({ data, date, metrics, onSuggest }: {
     const post = data.posts[key]
     const url = webUrl(post?.url ?? '')
     if (!url) return []
-    const likes = metrics[url]?.likes ?? post.likes
-    const comments = metrics[url]?.comments ?? post.comments
-    return [{ key, account, slot, url, caption: post.caption, likes, comments, imageUrl: metrics[url]?.imageUrl,
+    const likes = post.likes
+    const comments = post.comments
+    return [{ key, account, slot, url, caption: post.caption, likes, comments, imageUrl: webUrl(post.imageUrl ?? ''),
       total: (likes ?? 0) + (comments ?? 0) }]
   }))
   const ranked = publications.filter(post => post.likes != null || post.comments != null)
     .sort((a, b) => b.total - a.total || (b.likes ?? 0) - (a.likes ?? 0))
+  const unranked = publications.filter(post => post.likes == null && post.comments == null)
   const totals = ranked.reduce((sum, post) => ({
     likes: sum.likes + (post.likes ?? 0),
     comments: sum.comments + (post.comments ?? 0),
@@ -475,21 +361,22 @@ function Dashboard({ data, date, metrics, onSuggest }: {
     </div>
     <section className="settings" aria-labelledby="ranking-title">
       <h2 id="ranking-title">Publications les plus engageantes</h2>
-      <p className="sub">Classement par total des J’aime et des commentaires disponibles.</p>
+      <p className="sub">Classement selon les J’aime et les commentaires saisis dans le planning.</p>
       {ranked.length === 0 && <p className="empty">Aucune statistique disponible pour cette date.</p>}
-      {ranked.length > 0 && <ol className="account-list">
-        {ranked.map((post, index) => {
+      {publications.length > 0 && <ol className="account-list">
+        {[...ranked, ...unranked].map((post, index) => {
           const recipients = post.total > 0 ? captionRecipients(data, post.caption, post.account.id) : []
           return <li key={post.key} style={{ justifyContent: 'flex-start', alignItems: 'flex-start', gap: 16 }}>
             {post.imageUrl && <img key={post.imageUrl} src={post.imageUrl} alt={'Aperçu du post de ' + post.account.name}
               loading="lazy" decoding="async" referrerPolicy="no-referrer" onError={event => { event.currentTarget.hidden = true }}
               style={{ width: 'clamp(64px, 17vw, 120px)', aspectRatio: '1', flexShrink: 0, objectFit: 'cover', borderRadius: 8 }} />}
             <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-              <strong>{index + 1}. {post.account.name} · {post.slot} · {post.total} interactions relevées</strong>
+              <strong>{post.account.name} · {post.slot} · {index < ranked.length ? post.total + ' interactions relevées' : 'Compteurs à saisir'}</strong>
               <p className="sub">{post.likes ?? '—'} J’aime · {post.comments ?? '—'} commentaires</p>
               {post.caption && <p className="caption">{post.caption}</p>}
               <div className="account-actions">
                 <a className="btn" href={post.url} target="_blank" rel="noopener noreferrer">Ouvrir le post ↗</a>
+                <button className="btn" onClick={() => onEdit(post.account, post.slot)}>Saisir les compteurs</button>
                 {recipients.length > 0 && <button className="btn" onClick={() => onSuggest(post.key, post.caption, post.account.id)}>
                   Réutiliser la légende ({recipients.length} {recipients.length === 1 ? 'compte' : 'comptes'})
                 </button>}
@@ -637,7 +524,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
 
   async function savePost(target: Extract<Editor, { type: 'post' }>, post: Post) {
     const key = postKey(target.date, target.account, target.slot)
-    const filled = Boolean(post.count || post.caption || post.url || post.owner)
+    const filled = Boolean(post.count || post.caption || post.url || post.owner || post.imageUrl || post.likes != null || post.comments != null)
     const result = await commit(current => {
       const posts = { ...current.posts }
       if (filled) posts[key] = post
@@ -848,13 +735,6 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const posts = accounts.flatMap(account => slots
     .map(slot => data.posts[postKey(selected, account, slot)]).filter(Boolean))
   const planningReady = !shared || revision !== null
-  const trackedPosts = page === 'dashboard'
-    ? data.accounts.flatMap(account => slots.map(slot => data.posts[postKey(selected, account, slot)]).filter(Boolean))
-    : posts
-  const threadsUrls = (page === 'planning' || page === 'dashboard') && planningReady
-    ? trackedPosts.map(post => webUrl(post.url)).filter(url => threadsLink(url) && publicationKey(url).startsWith('threads:'))
-    : []
-  const liveMetrics = useLivePostMetrics(JSON.stringify([...new Set(threadsUrls)].sort()))
   const groups = [
     ...data.models.map(model => ({ id: model.id, name: model.name, accounts: data.accounts.filter(account => account.modelId === model.id) })),
     { id: null, name: 'Sans modèle', accounts: unassigned },
@@ -925,7 +805,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           </div>
           {accounts.length === 0 && <p className="empty">Aucun compte pour ce modèle.</p>}
           <div className="accounts">
-            {accounts.map(account => <AccountCard key={account.id} account={account} date={selected} posts={data.posts} liveMetrics={liveMetrics}
+            {accounts.map(account => <AccountCard key={account.id} account={account} date={selected} posts={data.posts}
               onEdit={slot => setEditor({ type: 'post', account, slot, date: selected })} />)}
           </div>
         </section>
@@ -937,7 +817,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       </> : page === 'dashboard' ? <>
         <header className="top"><h1>Tableau de bord</h1></header>
         <WeekPicker selected={selected} onSelect={setSelected} />
-        <Dashboard data={data} date={selected} metrics={liveMetrics}
+        <Dashboard data={data} date={selected}
+          onEdit={(account, slot) => setEditor({ type: 'post', account, slot, date: selected })}
           onSuggest={(key, caption, sourceId) => setEditor({ type: 'suggestion', key, caption, sourceId })} />
       </> : page === 'accounts' ? <>
         <header className="top">

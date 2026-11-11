@@ -1,5 +1,4 @@
-import { lookupThreads } from './threads'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
 import { CaptionUseEditor } from './CaptionUseEditor'
@@ -18,71 +17,11 @@ function ReferenceEditor({ reference, onClose, onSave }: {
   onSave: SaveReference
 }) {
   const [error, setError] = useState('')
-  const [caption, setCaption] = useState(reference?.caption ?? '')
-  const [author, setAuthor] = useState(reference?.author ?? '')
-  const [url, setUrl] = useState(reference?.url ?? '')
-  const [reactions, setReactions] = useState(String(reference?.reactions ?? ''))
-  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [lookup, setLookup] = useState<{ text: string; failed: boolean } | null>(null)
-  const requestRef = useRef<AbortController | null>(null)
-
-  useEffect(() => () => {
-    requestRef.current?.abort()
-    requestRef.current = null
-  }, [])
-
-  function cancelLookup() {
-    requestRef.current?.abort()
-    requestRef.current = null
-    setLoading(false)
-    setLookup(null)
-  }
-
-  async function retrievePostData() {
-    const request = new AbortController()
-    requestRef.current = request
-    setLoading(true)
-    setLookup(null)
-    try {
-      const result = await lookupThreads(url.trim(), false, request.signal)
-      if (requestRef.current !== request) return
-
-      const likes = result.likes
-      const hasLikes = typeof likes === 'number' && Number.isSafeInteger(likes) && likes >= 0
-      const fetchedCaption = typeof result.caption === 'string' ? result.caption.trim() : ''
-      const fetchedAuthor = typeof result.author === 'string' ? result.author.trim() : ''
-      const missing = [
-        !fetchedCaption && 'légende',
-        !fetchedAuthor && 'auteur',
-        !hasLikes && 'nombre de J’aime',
-      ].filter(Boolean)
-      if (missing.length === 3) throw new Error('Les données de cette publication sont indisponibles.')
-
-      if (fetchedCaption) setCaption(fetchedCaption)
-      if (fetchedAuthor) setAuthor(fetchedAuthor)
-      if (hasLikes) setReactions(String(likes))
-      const text = missing.length
-        ? 'Données récupérées. Champs indisponibles à compléter si besoin (' + missing.join(', ') + ').'
-        : 'Légende, auteur et J’aime récupérés.'
-      setLookup({ text, failed: false })
-    } catch (failure) {
-      if (requestRef.current === request) {
-        const message = failure instanceof Error && failure.name === 'Error' ? failure.message
-          : 'Impossible de contacter le service. Tu peux compléter les champs manuellement.'
-        setLookup({ text: message, failed: true })
-      }
-    } finally {
-      if (requestRef.current === request) {
-        requestRef.current = null
-        setLoading(false)
-      }
-    }
-  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (saving || loading) return
+    if (saving) return
     const form = event.currentTarget
     const data = new FormData(form)
     const read = (name: string) => String(data.get(name) ?? '').trim()
@@ -115,39 +54,20 @@ function ReferenceEditor({ reference, onClose, onSave }: {
 
   return <Modal title={reference ? 'Modifier la publication' : 'Ajouter une publication de référence'} onClose={() => { if (!saving) onClose() }}>
     <form onSubmit={submit} onChange={() => setError('')}>
-      <label>Légende<textarea name="caption" disabled={saving} maxLength={5000} value={caption}
-        placeholder="Texte de la publication" onChange={event => {
-          cancelLookup()
-          setCaption(event.target.value)
-        }} /></label>
-      <label>Auteur<input name="author" disabled={saving} required maxLength={150} value={author}
-        placeholder="Nom ou @identifiant de l’auteur" onChange={event => {
-          cancelLookup()
-          setAuthor(event.target.value)
-        }} /></label>
+      <label>Légende<textarea name="caption" disabled={saving} maxLength={5000}
+        defaultValue={reference?.caption} placeholder="Texte de la publication" /></label>
+      <label>Auteur<input name="author" disabled={saving} required maxLength={150}
+        defaultValue={reference?.author} placeholder="Nom ou @identifiant de l’auteur" /></label>
       <label>Lien de la publication<input name="url" disabled={saving} type="url" required maxLength={2000}
-        value={url} placeholder="https://…" onChange={event => {
-          cancelLookup()
-          setUrl(event.target.value)
-        }} /></label>
-      <div className="reference-actions">
-        <button className="btn" type="button" disabled={saving || loading || !url.trim()} onClick={retrievePostData}>
-          {loading ? 'Récupération…' : 'Récupérer les données du post'}
-        </button>
-      </div>
-      {lookup && <p className={lookup.failed ? 'form-error' : 'sub'}
-        role={lookup.failed ? 'alert' : 'status'}>{lookup.text}</p>}
+        defaultValue={reference?.url} placeholder="https://…" /></label>
       <label>Nombre de réactions<input name="reactions" disabled={saving} type="number" required min="0" step="1"
-        value={reactions} placeholder="0" onChange={event => {
-          cancelLookup()
-          setReactions(event.target.value)
-        }} /></label>
+        defaultValue={reference?.reactions} placeholder="0" /></label>
       <label>Agent qui a enregistré la publication<input name="agent" disabled={saving} required maxLength={150}
         defaultValue={reference?.agent} placeholder="Nom de l’agent" /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
         <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
-        <button className="btn primary" type="submit" disabled={saving || loading}>{saving ? 'Vérification…' : 'Enregistrer'}</button>
+        <button className="btn primary" type="submit" disabled={saving}>{saving ? 'Vérification…' : 'Enregistrer'}</button>
       </div>
     </form>
   </Modal>
