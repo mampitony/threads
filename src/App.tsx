@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { Modal } from './Modal'
 import { Tylan } from './Tylan'
-import { AccountGroup, ModelEditor } from './Models'
+import { ModelEditor } from './Models'
 import {
   dateKey, emptyPost, exportCsv, formatDate, fromKey, loadPlanning, postKey, initialPlanning as emptyWorkspace,
   readPlanning, shiftDate, slots, todayKey, webUrl,
@@ -21,6 +21,7 @@ const symbols = {
   Soir: <path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z" />,
   references: <><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 8h6m-6 4h6m-6 4h4" /></>,
   export: <path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4" />,
+  stats: <path d="M4 4v16h16M8 16v-3m5 3V9m5 7V6" />,
 }
 
 function Icon({ name }: { name: keyof typeof symbols }) {
@@ -370,9 +371,136 @@ function AccountEditor({ account, models, modelId, onClose, onSave }: {
   </Modal>
 }
 
+function captionKey(value: string) {
+  return value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr')
+}
+
+function captionRecipients(data: Planning, caption: string, sourceId: string) {
+  const key = captionKey(caption)
+  if (!key) return []
+  const used = new Set([sourceId])
+  for (const [postId, post] of Object.entries(data.posts)) {
+    if (captionKey(post.caption) === key) used.add(postId.split('|')[1])
+  }
+  const references = new Set(data.references.filter(reference => captionKey(reference.caption) === key)
+    .map(reference => reference.id))
+  for (const use of data.captionUses) {
+    if (references.has(use.referenceId)) used.add(use.accountId)
+  }
+  return data.accounts.filter(account => !used.has(account.id))
+}
+
+function freeCaptionSlot(post?: Post) {
+  return !post?.caption && !post?.url && !post?.count
+}
+
+function CaptionSuggestion({ data, caption, sourceId, onClose, onSave }: {
+  data: Planning
+  caption: string
+  sourceId: string
+  onClose: () => void
+  onSave: (accountId: string, date: string, slot: Slot) => Promise<string>
+}) {
+  const recipients = captionRecipients(data, caption, sourceId)
+  const [targetId, setTargetId] = useState('')
+  const [date, setDate] = useState(todayKey)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const target = recipients.find(account => account.id === targetId)
+  const available = target && date ? slots.filter(slot => freeCaptionSlot(data.posts[postKey(date, target, slot)])) : []
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const slot = new FormData(event.currentTarget).get('slot')
+    if (!target || saving || !available.some(option => option === slot)) return
+    setSaving(true)
+    setError(await onSave(target.id, date, slot as Slot))
+    setSaving(false)
+  }
+
+  return <Modal title="Réutiliser la légende" onClose={() => { if (!saving) onClose() }}>
+    <p className="caption">{caption}</p>
+    <form onSubmit={submit} onChange={() => setError('')}>
+      <label>Compte
+        <select required value={targetId} disabled={saving} onChange={event => setTargetId(event.target.value)}>
+          <option value="">Choisir un compte</option>
+          {recipients.map(account => <option key={account.id} value={account.id}>{account.name} · @{account.handle}</option>)}
+        </select>
+      </label>
+      <label>Date<input type="date" required value={date} disabled={saving} onChange={event => setDate(event.target.value)} /></label>
+      {target && date && available.length === 0 && <p className="sub">Aucun créneau libre pour ce compte à cette date.</p>}
+      <label>Créneau
+        <select name="slot" key={targetId + '|' + date} required disabled={saving || !available.length}>
+          {available.map(slot => <option key={slot}>{slot}</option>)}
+        </select>
+      </label>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <div className="actions">
+        <button type="button" className="btn" disabled={saving} onClick={onClose}>Fermer</button>
+        <button className="btn primary" disabled={saving || !available.length}>Ajouter au planning</button>
+      </div>
+    </form>
+  </Modal>
+}
+
+function Dashboard({ data, date, metrics, onSuggest }: {
+  data: Planning
+  date: string
+  metrics: Record<string, PostMetrics>
+  onSuggest: (key: string, caption: string, sourceId: string) => void
+}) {
+  const publications = data.accounts.flatMap(account => slots.flatMap(slot => {
+    const key = postKey(date, account, slot)
+    const post = data.posts[key]
+    const url = webUrl(post?.url ?? '')
+    if (!url) return []
+    const likes = metrics[url]?.likes ?? post.likes
+    const comments = metrics[url]?.comments ?? post.comments
+    return [{ key, account, slot, url, caption: post.caption, likes, comments,
+      total: (likes ?? 0) + (comments ?? 0) }]
+  }))
+  const ranked = publications.filter(post => post.likes != null || post.comments != null)
+    .sort((a, b) => b.total - a.total || (b.likes ?? 0) - (a.likes ?? 0))
+  const totals = ranked.reduce((sum, post) => ({
+    likes: sum.likes + (post.likes ?? 0),
+    comments: sum.comments + (post.comments ?? 0),
+  }), { likes: 0, comments: 0 })
+
+  return <>
+    <div className="stats">
+      <div className="stat"><b>{ranked.length} / {publications.length}</b><span>Publications avec statistiques</span></div>
+      <div className="stat"><b>{totals.likes}</b><span>J’aime relevés</span></div>
+      <div className="stat"><b>{totals.comments}</b><span>Commentaires relevés</span></div>
+    </div>
+    <section className="settings" aria-labelledby="ranking-title">
+      <h2 id="ranking-title">Publications les plus engageantes</h2>
+      <p className="sub">Classement par total des J’aime et des commentaires disponibles.</p>
+      {ranked.length === 0 && <p className="empty">Aucune statistique disponible pour cette date.</p>}
+      {ranked.length > 0 && <ol className="account-list">
+        {ranked.map((post, index) => {
+          const recipients = post.total > 0 ? captionRecipients(data, post.caption, post.account.id) : []
+          return <li key={post.key} style={{ display: 'block' }}>
+            <strong>{index + 1}. {post.account.name} · {post.slot} · {post.total} interactions relevées</strong>
+            <p className="sub">{post.likes ?? '—'} J’aime · {post.comments ?? '—'} commentaires</p>
+            {post.caption && <p className="caption">{post.caption}</p>}
+            <div className="account-actions">
+              <a className="btn" href={post.url} target="_blank" rel="noopener noreferrer">Ouvrir le post ↗</a>
+              {recipients.length > 0 && <button className="btn" onClick={() => onSuggest(post.key, post.caption, post.account.id)}>
+                Réutiliser la légende ({recipients.length} {recipients.length === 1 ? 'compte' : 'comptes'})
+              </button>}
+            </div>
+          </li>
+        })}
+      </ol>}
+    </section>
+  </>
+}
+
 type Editor = { type: 'post'; account: Account; slot: Slot; date: string }
   | { type: 'account'; account?: Account; modelId?: string }
   | { type: 'model'; model?: Model }
+  | { type: 'group'; modelId: string | null }
+  | { type: 'suggestion'; key: string; caption: string; sourceId: string }
 
 export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   storageKey: string
@@ -390,7 +518,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const [selected, setSelected] = useState('2026-11-10')
   const [filter, setFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
-  const [page, setPage] = useState<'planning' | 'accounts' | 'tylan' | 'approvals'>('planning')
+  const [page, setPage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals'>('planning')
   const [editor, setEditor] = useState<Editor | null>(null)
   const [message, setMessage] = useState(initial.error)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -516,6 +644,32 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       return ''
     }
     return 'Impossible d’enregistrer ce créneau. Réessaie.'
+  }
+
+  async function saveSuggestion(source: Extract<Editor, { type: 'suggestion' }>, accountId: string, date: string, slot: Slot) {
+    let conflict = ''
+    const result = await commit(current => {
+      if (current.posts[source.key]?.caption !== source.caption) {
+        conflict = 'La légende source a changé. Rouvre la suggestion.'
+        return null
+      }
+      const account = captionRecipients(current, source.caption, source.sourceId).find(item => item.id === accountId)
+      if (!account) {
+        conflict = 'Ce compte est indisponible ou a déjà utilisé cette légende.'
+        return null
+      }
+      const key = postKey(date, account, slot)
+      const post = current.posts[key]
+      if (!freeCaptionSlot(post)) {
+        conflict = 'Ce créneau est déjà occupé. Choisis un autre créneau.'
+        return null
+      }
+      return { ...current, posts: { ...current.posts, [key]: { ...(post ?? emptyPost), caption: source.caption } } }
+    })
+    if (result !== 'saved') return conflict || 'Impossible d’ajouter la légende. Réessaie.'
+    setEditor(null)
+    notice('Légende ajoutée au planning.')
+    return ''
   }
 
   async function saveAccount(previous: Account | undefined, name: string, handle: string, modelId: string) {
@@ -688,10 +842,18 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const posts = accounts.flatMap(account => slots
     .map(slot => data.posts[postKey(selected, account, slot)]).filter(Boolean))
   const planningReady = !shared || revision !== null
-  const threadsUrls = page === 'planning' && planningReady
-    ? posts.map(post => webUrl(post.url)).filter(url => threadsLink(url) && publicationKey(url).startsWith('threads:'))
+  const trackedPosts = page === 'dashboard'
+    ? data.accounts.flatMap(account => slots.map(slot => data.posts[postKey(selected, account, slot)]).filter(Boolean))
+    : posts
+  const threadsUrls = (page === 'planning' || page === 'dashboard') && planningReady
+    ? trackedPosts.map(post => webUrl(post.url)).filter(url => threadsLink(url) && publicationKey(url).startsWith('threads:'))
     : []
   const liveMetrics = useLivePostMetrics(JSON.stringify([...new Set(threadsUrls)].sort()))
+  const groups = [
+    ...data.models.map(model => ({ id: model.id, name: model.name, accounts: data.accounts.filter(account => account.modelId === model.id) })),
+    { id: null, name: 'Sans modèle', accounts: unassigned },
+  ]
+  const openGroup = editor?.type === 'group' ? groups.find(group => group.id === editor.modelId) : undefined
 
   if (!planningReady) {
     return <main className="auth-page">
@@ -710,6 +872,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       <nav aria-label="Navigation principale">
         <span className="nav-label">Espace de travail</span>
         <button aria-current={page === 'planning' ? 'page' : undefined} onClick={() => setPage('planning')}><Icon name="calendar" />Planning</button>
+        <button aria-current={page === 'dashboard' ? 'page' : undefined} onClick={() => setPage('dashboard')}><Icon name="stats" />Tableau de bord</button>
         <button aria-current={page === 'accounts' ? 'page' : undefined} onClick={() => setPage('accounts')}><Icon name="people" />Comptes</button>
         <button aria-current={page === 'tylan' ? 'page' : undefined} onClick={() => setPage('tylan')}><Icon name="references" />Scrapping Tylan</button>
         {isAdmin && <button aria-current={page === 'approvals' ? 'page' : undefined}
@@ -765,6 +928,11 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
             <Icon name="export" />Exporter en CSV
           </button>
         </footer>
+      </> : page === 'dashboard' ? <>
+        <header className="top"><h1>Tableau de bord</h1></header>
+        <WeekPicker selected={selected} onSelect={setSelected} />
+        <Dashboard data={data} date={selected} metrics={liveMetrics}
+          onSuggest={(key, caption, sourceId) => setEditor({ type: 'suggestion', key, caption, sourceId })} />
       </> : page === 'accounts' ? <>
         <header className="top">
           <div><p className="eyebrow">Gestion des publications</p><h1>Comptes</h1>
@@ -775,16 +943,40 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           </div>
         </header>
         <div className="model-groups">
-          {data.models.map(model => <AccountGroup key={model.id} name={model.name}
-            accounts={data.accounts.filter(account => account.modelId === model.id)}
-            onAdd={() => setEditor({ type: 'account', modelId: model.id })}
-            onEditModel={() => setEditor({ type: 'model', model })}
-            onEditAccount={account => setEditor({ type: 'account', account })} />)}
-          <AccountGroup name="Sans modèle" accounts={unassigned}
-            onEditAccount={account => setEditor({ type: 'account', account })} />
+          {groups.map(group => <section className="settings" key={group.id ?? 'unassigned'}>
+            <div className="section-head" style={{ marginBlockEnd: 0 }}>
+              <div>
+                <h2>{group.name}</h2>
+                <p className="sub">{group.accounts.length} {group.accounts.length === 1 ? 'compte' : 'comptes'}</p>
+              </div>
+              <button className="btn" aria-haspopup="dialog" aria-label={'Voir les comptes · ' + group.name}
+                onClick={() => setEditor({ type: 'group', modelId: group.id })}>Voir les comptes</button>
+            </div>
+          </section>)}
         </div>
       </> : page === 'approvals' && isAdmin ? <PendingAccounts email={email} /> : <Tylan data={data} selectedDate={selected} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>
+    {openGroup && <Modal title={openGroup.name} onClose={() => setEditor(null)}>
+      <div className="account-actions">
+        <button className="btn" onClick={() => setEditor({ type: 'account', modelId: openGroup.id ?? undefined })}>Ajouter un compte</button>
+        {openGroup.id && <button className="btn" onClick={() => {
+          const model = data.models.find(item => item.id === openGroup.id)
+          if (model) setEditor({ type: 'model', model })
+        }}>Modifier le modèle</button>}
+      </div>
+      {openGroup.accounts.length ? <ul className="account-list">
+        {openGroup.accounts.map(account => <li key={account.id}>
+          <div><strong>{account.name}</strong><p className="handle">@{account.handle}</p></div>
+          <button className="btn" aria-label={'Modifier le compte ' + account.name}
+            onClick={() => setEditor({ type: 'account', account })}>Modifier</button>
+        </li>)}
+      </ul> : <p className="sub">Aucun compte dans ce groupe.</p>}
+      <div className="actions" style={{ marginBlockStart: 16 }}>
+        <button className="btn" onClick={() => setEditor(null)}>Fermer</button>
+      </div>
+    </Modal>}
+    {editor?.type === 'suggestion' && <CaptionSuggestion data={data} caption={editor.caption} sourceId={editor.sourceId}
+      onClose={() => setEditor(null)} onSave={(accountId, date, slot) => saveSuggestion(editor, accountId, date, slot)} />}
     {editor?.type === 'post' && <PostEditor account={editor.account} slot={editor.slot} date={editor.date}
       post={data.posts[postKey(editor.date, editor.account, editor.slot)]}
       owners={[...new Set(Object.values(data.posts).map(post => post.owner).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'))}
