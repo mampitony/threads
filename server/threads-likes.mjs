@@ -43,6 +43,28 @@ function reply(response, status, payload) {
   response.end(JSON.stringify(payload))
 }
 
+function postImageUrl(post) {
+  const media = Array.isArray(post.carousel_media) && post.carousel_media.length
+    ? post.carousel_media : [post]
+  for (const item of media) {
+    const candidates = item?.image_versions2?.candidates
+    if (!Array.isArray(candidates)) continue
+    for (const candidate of candidates) {
+      if (typeof candidate?.url !== 'string') continue
+      try {
+        const url = new URL(candidate.url)
+        const isMediaHost = /(^|\.)(cdninstagram\.com|fbcdn\.net)$/i.test(url.hostname)
+        if (isMediaHost && url.protocol === 'https:' && !url.username && !url.password && !url.port) {
+          return url.href
+        }
+      } catch {
+        // Try the next candidate if the URL is malformed.
+      }
+    }
+  }
+  return null
+}
+
 export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false) {
   return async (request, response, next) => {
     const path = request.url ?? '/'
@@ -116,10 +138,11 @@ export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false
       const caption = typeof source.caption?.text === 'string' ? source.caption.text.trim() : ''
       const username = typeof source.user?.username === 'string' ? source.user.username.trim() : ''
       const author = username ? '@' + username.replace(/^@/, '') : null
-      if (likes === null && comments === null && !caption && !author) {
+      const imageUrl = postImageUrl(source)
+      if (likes === null && comments === null && !caption && !author && !imageUrl) {
         return reply(response, 502, { error: 'Les données de cette publication sont indisponibles.' })
       }
-      return reply(response, 200, { likes, comments, caption: caption || null, author })
+      return reply(response, 200, { likes, comments, caption: caption || null, author, imageUrl })
     } catch {
       return reply(response, 502, { error: 'Impossible de récupérer les données de la publication. Réessaie ou complète les champs manuellement.' })
     }

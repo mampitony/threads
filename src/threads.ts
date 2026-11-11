@@ -36,6 +36,7 @@ export async function lookupThreads(url: string, resolveOnly = false, signal?: A
     comments?: number | null
     caption?: string | null
     author?: string | null
+    imageUrl?: string | null
     error?: string
   } = await response.json()
   if (response.status === 401) window.dispatchEvent(new Event('planning-session-expired'))
