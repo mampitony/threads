@@ -622,7 +622,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     return result === 'conflict' ? 'Rattache d’abord les comptes de ce modèle à un autre groupe.' : ''
   }
 
-  async function saveSubmittedPost({ url, agent }: SubmittedPost) {
+  async function saveSubmittedPost({ url, agent }: SubmittedPost, previous?: SubmittedPost) {
     if (!agent || agent.length > 150) return 'Renseigne le nom de l’agent.'
     const link = threadsLink(url)
     if (!link || link.username || link.password || link.port || url.length > 2000
@@ -641,14 +641,38 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     let conflict = ''
     const result = await commit(current => {
       const submittedPosts = current.submittedPosts ?? []
-      const duplicate = submittedPosts.find(post => publicationKey(post.url) === key)
+      const index = previous ? submittedPosts.findIndex(post => post.url === previous.url && post.agent === previous.agent) : -1
+      if (previous && index === -1) {
+        conflict = 'Ce lien a été modifié ou supprimé. Rouvre la fiche depuis la liste.'
+        return null
+      }
+      const duplicate = submittedPosts.find((post, position) => position !== index && publicationKey(post.url) === key)
       if (duplicate) {
         conflict = 'Ce post est déjà enregistré par ' + duplicate.agent + '.'
         return null
       }
-      return { ...current, submittedPosts: [{ url: canonicalUrl, agent }, ...submittedPosts] }
+      const updated = { url: canonicalUrl, agent }
+      return {
+        ...current,
+        submittedPosts: previous
+          ? submittedPosts.map((post, position) => position === index ? updated : post)
+          : [updated, ...submittedPosts],
+      }
     })
     return result === 'saved' ? '' : conflict || 'Impossible d’enregistrer le lien. Réessaie.'
+  }
+
+  async function removeSubmittedPost(previous: SubmittedPost) {
+    const result = await commit(current => {
+      const submittedPosts = current.submittedPosts ?? []
+      const remaining = submittedPosts.filter(post => post.url !== previous.url || post.agent !== previous.agent)
+      if (remaining.length === submittedPosts.length) return null
+      return { ...current, submittedPosts: remaining }
+    })
+    if (result === 'saved') return ''
+    return result === 'conflict'
+      ? 'Ce lien a déjà été modifié ou supprimé. Vérifie la liste.'
+      : 'Impossible de supprimer le lien. Réessaie.'
   }
 
   async function saveReference(fields: Omit<TylanReference, 'id'>, id?: string) {
@@ -872,7 +896,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
             </div>
           </section>)}
         </div>
-      </> : page === 'submissions' ? <SubmittedPosts posts={data.submittedPosts ?? []} onSave={saveSubmittedPost} />
+      </> : page === 'submissions' ? <SubmittedPosts posts={data.submittedPosts ?? []}
+        onSave={saveSubmittedPost} onRemove={removeSubmittedPost} />
         : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
         : <Tylan data={data} selectedDate={selected} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>
