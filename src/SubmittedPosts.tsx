@@ -1,6 +1,19 @@
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
+import { Modal } from './Modal'
 import type { SubmittedPost } from './planning'
+
+function groupPostsByAgent(posts: SubmittedPost[]) {
+  const groups = new Map<string, { name: string; posts: SubmittedPost[] }>()
+  for (const post of posts) {
+    const name = post.agent.normalize('NFC').trim().replace(/\s+/g, ' ')
+    const key = name.toLocaleLowerCase('fr')
+    const group = groups.get(key)
+    if (group) group.posts.push(post)
+    else groups.set(key, { name, posts: [post] })
+  }
+  return [...groups.entries()].sort(([, a], [, b]) => a.name.localeCompare(b.name, 'fr'))
+}
 
 export function SubmittedPosts({ posts, onSave, onRemove }: {
   posts: SubmittedPost[]
@@ -10,13 +23,15 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
   const [agent, setAgent] = useState('')
   const [url, setUrl] = useState('')
   const [saving, setSaving] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<SubmittedPost | null>(null)
   const [removing, setRemoving] = useState('')
   const [error, setError] = useState('')
   const [removeError, setRemoveError] = useState('')
   const [feedback, setFeedback] = useState('')
-  const linkInput = useRef<HTMLInputElement>(null)
+  const lastAddingAgent = useRef('')
   const busy = saving || Boolean(removing)
+  const groups = groupPostsByAgent(posts)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -28,28 +43,31 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
       const message = await onSave({ url: url.trim(), agent: agent.trim() }, editing ?? undefined)
       if (message) setError(message)
       else {
+        if (!editing) lastAddingAgent.current = agent.trim()
         setUrl('')
         setFeedback(editing ? 'Lien modifié.' : 'Lien ajouté à la liste partagée.')
         setEditing(null)
+        setFormOpen(false)
       }
     } finally {
       setSaving(false)
     }
   }
 
-  function startEdit(post: SubmittedPost) {
-    setEditing(post)
-    setAgent(post.agent)
-    setUrl(post.url)
+  function openForm(post?: SubmittedPost) {
+    setEditing(post ?? null)
+    setAgent(post?.agent ?? lastAddingAgent.current)
+    setUrl(post?.url ?? '')
     setError('')
     setFeedback('')
-    linkInput.current?.focus()
+    setFormOpen(true)
   }
 
-  function cancelEdit() {
+  function closeForm() {
+    if (saving) return
+    setFormOpen(false)
     setEditing(null)
     setUrl('')
-    setAgent('')
     setError('')
   }
 
@@ -62,7 +80,6 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
       const message = await onRemove(post)
       if (message) setRemoveError(message)
       else {
-        if (editing?.url === post.url) cancelEdit()
         setFeedback('Lien supprimé.')
       }
     } finally {
@@ -81,42 +98,47 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
   }
 
   return <>
-    <header className="top"><h1>Liens à transmettre</h1></header>
-    <section className="settings" aria-label={editing ? 'Modifier un lien' : 'Ajouter un lien'}>
-      {editing && <h2>Modifier le lien</h2>}
+    <header className="top">
+      <h1>Liens à transmettre</h1>
+      <button className="btn primary" type="button" aria-haspopup="dialog" disabled={busy}
+        onClick={() => openForm()}>Ajouter un lien</button>
+    </header>
+    {formOpen && <Modal title={editing ? 'Modifier le lien' : 'Ajouter un lien'} onClose={closeForm}>
       <form onSubmit={submit} onChange={() => { setError(''); setFeedback('') }}>
         <label>Nom de l’agent<input required maxLength={150} value={agent}
           disabled={busy} onChange={event => setAgent(event.target.value)} /></label>
-        <label>Lien du post Threads<input ref={linkInput} required type="url" maxLength={2000} value={url}
+        <label>Lien du post Threads<input required type="url" maxLength={2000} value={url}
           disabled={busy} onChange={event => setUrl(event.target.value)} /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="actions">
-          {editing && <button className="btn" type="button" disabled={busy} onClick={cancelEdit}>Annuler</button>}
+          <button className="btn" type="button" disabled={busy} onClick={closeForm}>Annuler</button>
           <button className="btn primary" type="submit" disabled={busy}>
             {saving ? 'Vérification…' : editing ? 'Enregistrer la modification' : 'Ajouter le lien'}
           </button>
         </div>
       </form>
-    </section>
+    </Modal>}
     <p className="sub" role="status">{feedback}</p>
     <section className="settings" aria-labelledby="submitted-posts-title">
       <h2 id="submitted-posts-title">Liens enregistrés</h2>
       {removeError && <p className="form-error" role="alert">{removeError}</p>}
-      {posts.length === 0 ? <p className="sub">Aucun lien enregistré.</p> : <ul className="account-list">
-        {posts.map(post => <li key={post.url} style={{ flexWrap: 'wrap' }}>
-          <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-            <a href={post.url} target="_blank" rel="noopener noreferrer">{post.url}</a>
-            <p className="sub">Enregistré par {post.agent}</p>
-          </div>
-          <div className="account-actions">
-            <button className="btn" type="button" onClick={() => void copy(post.url)}>Copier le lien</button>
-            <button className="btn" type="button" disabled={busy} onClick={() => startEdit(post)}>Modifier</button>
-            <button className="btn danger" type="button" disabled={busy} onClick={() => void remove(post)}>
-              {removing === post.url ? 'Suppression…' : 'Supprimer'}
-            </button>
-          </div>
-        </li>)}
-      </ul>}
+      {groups.length === 0 && <p className="sub">Aucun lien enregistré.</p>}
+      {groups.map(([key, group]) => <section key={key} style={{ marginBlockStart: 16 }}>
+        <h3 style={{ overflowWrap: 'anywhere' }}>{group.name} · {group.posts.length} {group.posts.length === 1 ? 'lien' : 'liens'}</h3>
+        <ul className="account-list">
+          {group.posts.map(post => <li key={post.url} style={{ flexWrap: 'wrap' }}>
+            <a href={post.url} target="_blank" rel="noopener noreferrer"
+              style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{post.url}</a>
+            <div className="account-actions">
+              <button className="btn" type="button" onClick={() => void copy(post.url)}>Copier le lien</button>
+              <button className="btn" type="button" aria-haspopup="dialog" disabled={busy} onClick={() => openForm(post)}>Modifier</button>
+              <button className="btn danger" type="button" disabled={busy} onClick={() => void remove(post)}>
+                {removing === post.url ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </li>)}
+        </ul>
+      </section>)}
     </section>
   </>
 }
