@@ -19,7 +19,13 @@ export type CaptionUse = {
 }
 export type CaptionTarget = { accountId: string; modelId: string; date: string; slot: Slot }
 
-export type SubmittedPost = { url: string; agent: string }
+export type SubmittedPost = {
+  url: string
+  agent: string
+  reactions?: number
+  addedOn?: string
+  publishedOn?: string
+}
 
 export type Planning = {
   accounts: Account[]
@@ -90,6 +96,11 @@ export const todayKey = () => new Intl.DateTimeFormat('sv-SE', {
 
 export const fromKey = (date: string) => new Date(date + 'T12:00:00Z')
 export const dateKey = (date: Date) => date.toISOString().slice(0, 10)
+export function isDateKey(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = fromKey(value)
+  return Number.isFinite(date.getTime()) && dateKey(date) === value
+}
 export const formatDate = (date: Date, options: Intl.DateTimeFormatOptions) =>
   date.toLocaleDateString('fr-FR', { ...options, timeZone: 'UTC' })
 

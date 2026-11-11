@@ -10,7 +10,7 @@ import { Tylan } from './Tylan'
 import { ModelEditor } from './Models'
 import {
   dateKey, emptyPost, exportCsv, formatDate, fromKey, loadPlanning, postKey, initialPlanning as emptyWorkspace,
-  readPlanning, shiftDate, slots, todayKey, webUrl,
+  isDateKey, readPlanning, shiftDate, slots, todayKey, webUrl,
 } from './planning'
 import type { Account, CaptionTarget, Model, Planning, Post, Slot, SubmittedPost, TylanReference } from './planning'
 
@@ -622,8 +622,15 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     return result === 'conflict' ? 'Rattache d’abord les comptes de ce modèle à un autre groupe.' : ''
   }
 
-  async function saveSubmittedPost({ url, agent }: SubmittedPost, previous?: SubmittedPost) {
+  async function saveSubmittedPost({ url, agent, reactions, publishedOn }: SubmittedPost, previous?: SubmittedPost) {
     if (!agent || agent.length > 150) return 'Renseigne le nom de l’agent.'
+    if (reactions !== undefined && (!Number.isSafeInteger(reactions) || reactions < 0)) {
+      return 'Saisis un nombre entier de réactions supérieur ou égal à zéro.'
+    }
+    const today = todayKey()
+    if (publishedOn !== undefined && (!isDateKey(publishedOn) || publishedOn > today)) {
+      return 'Saisis une date de publication valide, au plus tard aujourd’hui.'
+    }
     const link = threadsLink(url)
     if (!link || link.username || link.password || link.port || url.length > 2000
       || !publicationKey(link.href).startsWith('threads:')) {
@@ -641,7 +648,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     let conflict = ''
     const result = await commit(current => {
       const submittedPosts = current.submittedPosts ?? []
-      const index = previous ? submittedPosts.findIndex(post => post.url === previous.url && post.agent === previous.agent) : -1
+      const index = previous ? submittedPosts.findIndex(post =>
+        post.url === previous.url && post.agent === previous.agent && post.reactions === previous.reactions
+        && post.addedOn === previous.addedOn && post.publishedOn === previous.publishedOn) : -1
       if (previous && index === -1) {
         conflict = 'Ce lien a été modifié ou supprimé. Rouvre la fiche depuis la liste.'
         return null
@@ -651,7 +660,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         conflict = 'Ce post est déjà enregistré par ' + duplicate.agent + '.'
         return null
       }
-      const updated = { url: canonicalUrl, agent }
+      const updated = { url: canonicalUrl, agent, reactions, publishedOn, addedOn: previous ? previous.addedOn : today }
       return {
         ...current,
         submittedPosts: previous
@@ -665,7 +674,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   async function removeSubmittedPost(previous: SubmittedPost) {
     const result = await commit(current => {
       const submittedPosts = current.submittedPosts ?? []
-      const remaining = submittedPosts.filter(post => post.url !== previous.url || post.agent !== previous.agent)
+      const remaining = submittedPosts.filter(post =>
+        post.url !== previous.url || post.agent !== previous.agent || post.reactions !== previous.reactions
+        || post.addedOn !== previous.addedOn || post.publishedOn !== previous.publishedOn)
       if (remaining.length === submittedPosts.length) return null
       return { ...current, submittedPosts: remaining }
     })

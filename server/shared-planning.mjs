@@ -2,6 +2,12 @@ const text = value => typeof value === 'string'
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 const count = value => Number.isSafeInteger(value) && value >= 0
 const optionalCount = value => value === undefined || count(value)
+const optionalDate = value => {
+  if (value === undefined) return true
+  if (!text(value) || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(value + 'T12:00:00Z')
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
+}
 const webLink = value => {
   try { return text(value) && ['http:', 'https:'].includes(new URL(value).protocol) }
   catch { return false }
@@ -12,7 +18,8 @@ function validSubmittedPosts(posts) {
   const codes = new Set()
   return posts.every(post => {
     if (!object(post) || !text(post.agent) || !post.agent.trim() || post.agent.length > 150
-      || !webLink(post.url) || post.url.length > 2000) return false
+      || !webLink(post.url) || post.url.length > 2000 || !optionalCount(post.reactions)
+      || !optionalDate(post.addedOn) || !optionalDate(post.publishedOn)) return false
     const url = new URL(post.url)
     const code = /^\/@[\w.]+\/post\/([\w-]+)\/?$/.exec(url.pathname)?.[1]
     if (url.protocol !== 'https:' || !/^(www\.)?threads\.(com|net)$/.test(url.hostname)

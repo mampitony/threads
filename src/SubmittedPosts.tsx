@@ -1,7 +1,24 @@
 import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
+import { formatDate, fromKey, todayKey } from './planning'
 import type { SubmittedPost } from './planning'
+
+const reactionFormat = new Intl.NumberFormat('fr-FR')
+const millisecondsPerDay = 86_400_000
+
+function filterPosts(posts: SubmittedPost[], today: string, addedOn: string, maxAge: string, minReactions: string) {
+  const todayTime = fromKey(today).getTime()
+  return posts.filter(post => {
+    if (addedOn && post.addedOn !== addedOn) return false
+    if (maxAge !== '') {
+      if (!post.publishedOn) return false
+      const age = (todayTime - fromKey(post.publishedOn).getTime()) / millisecondsPerDay
+      if (!(age >= 0 && age <= Number(maxAge))) return false
+    }
+    return minReactions === '' || (post.reactions !== undefined && post.reactions >= Number(minReactions))
+  })
+}
 
 function groupPostsByAgent(posts: SubmittedPost[]) {
   const groups = new Map<string, { name: string; posts: SubmittedPost[] }>()
@@ -22,6 +39,11 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
 }) {
   const [agent, setAgent] = useState('')
   const [url, setUrl] = useState('')
+  const [reactions, setReactions] = useState('')
+  const [publishedOn, setPublishedOn] = useState('')
+  const [addedOnFilter, setAddedOnFilter] = useState('')
+  const [maxAgeFilter, setMaxAgeFilter] = useState('')
+  const [minReactionsFilter, setMinReactionsFilter] = useState('')
   const [saving, setSaving] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<SubmittedPost | null>(null)
@@ -31,7 +53,10 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
   const [feedback, setFeedback] = useState('')
   const lastAddingAgent = useRef('')
   const busy = saving || Boolean(removing)
-  const groups = groupPostsByAgent(posts)
+  const today = todayKey()
+  const filtered = filterPosts(posts, today, addedOnFilter, maxAgeFilter, minReactionsFilter)
+  const groups = groupPostsByAgent(filtered)
+  const hasFilters = Boolean(addedOnFilter || maxAgeFilter || minReactionsFilter)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -40,7 +65,12 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
     setError('')
     setFeedback('')
     try {
-      const message = await onSave({ url: url.trim(), agent: agent.trim() }, editing ?? undefined)
+      const message = await onSave({
+        url: url.trim(),
+        agent: agent.trim(),
+        reactions: reactions === '' ? undefined : Number(reactions),
+        publishedOn: publishedOn || undefined,
+      }, editing ?? undefined)
       if (message) setError(message)
       else {
         if (!editing) lastAddingAgent.current = agent.trim()
@@ -58,6 +88,8 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
     setEditing(post ?? null)
     setAgent(post?.agent ?? lastAddingAgent.current)
     setUrl(post?.url ?? '')
+    setReactions(String(post?.reactions ?? ''))
+    setPublishedOn(post?.publishedOn ?? '')
     setError('')
     setFeedback('')
     setFormOpen(true)
@@ -109,6 +141,10 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
           disabled={busy} onChange={event => setAgent(event.target.value)} /></label>
         <label>Lien du post Threads<input required type="url" maxLength={2000} value={url}
           disabled={busy} onChange={event => setUrl(event.target.value)} /></label>
+        <label>Nombre de réactions (facultatif)<input type="number" min="0" max={Number.MAX_SAFE_INTEGER}
+          step="1" value={reactions} disabled={busy} onChange={event => setReactions(event.target.value)} /></label>
+        <label>Date de publication (facultative)<input type="date" max={today} value={publishedOn}
+          disabled={busy} onChange={event => setPublishedOn(event.target.value)} /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="actions">
           <button className="btn" type="button" disabled={busy} onClick={closeForm}>Annuler</button>
@@ -121,14 +157,36 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
     <p className="sub" role="status">{feedback}</p>
     <section className="settings" aria-labelledby="submitted-posts-title">
       <h2 id="submitted-posts-title">Liens enregistrés</h2>
+      <div className="account-actions" role="group" aria-label="Filtrer les liens" style={{ alignItems: 'end', marginBlock: 12 }}>
+        <label>Date d’ajout<input type="date" value={addedOnFilter}
+          onChange={event => setAddedOnFilter(event.target.value)} /></label>
+        <label>Âge maximal du post (jours)<input type="number" min="0" step="1" value={maxAgeFilter}
+          onChange={event => setMaxAgeFilter(event.target.value)} /></label>
+        <label>Réactions minimum<input type="number" min="0" step="1" value={minReactionsFilter}
+          onChange={event => setMinReactionsFilter(event.target.value)} /></label>
+        {hasFilters && <button className="btn" type="button" onClick={() => {
+          setAddedOnFilter('')
+          setMaxAgeFilter('')
+          setMinReactionsFilter('')
+        }}>Effacer les filtres</button>}
+      </div>
+      {hasFilters && <p className="sub" role="status">{filtered.length} / {posts.length} liens affichés</p>}
       {removeError && <p className="form-error" role="alert">{removeError}</p>}
-      {groups.length === 0 && <p className="sub">Aucun lien enregistré.</p>}
+      {groups.length === 0 && <p className="sub">{hasFilters ? 'Aucun lien ne correspond aux filtres.' : 'Aucun lien enregistré.'}</p>}
       {groups.map(([key, group]) => <section key={key} style={{ marginBlockStart: 16 }}>
         <h3 style={{ overflowWrap: 'anywhere' }}>{group.name} · {group.posts.length} {group.posts.length === 1 ? 'lien' : 'liens'}</h3>
         <ul className="account-list">
           {group.posts.map(post => <li key={post.url} style={{ flexWrap: 'wrap' }}>
-            <a href={post.url} target="_blank" rel="noopener noreferrer"
-              style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{post.url}</a>
+            <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+              <a href={post.url} target="_blank" rel="noopener noreferrer">{post.url}</a>
+              <p className="sub">{post.reactions === undefined ? 'Réactions non renseignées'
+                : reactionFormat.format(post.reactions) + (post.reactions > 1 ? ' réactions' : ' réaction')}</p>
+              <p className="sub">
+                {post.addedOn ? 'Ajouté le ' + formatDate(fromKey(post.addedOn), { dateStyle: 'medium' }) : 'Date d’ajout inconnue'}
+                {' · '}
+                {post.publishedOn ? 'Publié le ' + formatDate(fromKey(post.publishedOn), { dateStyle: 'medium' }) : 'Date de publication inconnue'}
+              </p>
+            </div>
             <div className="account-actions">
               <button className="btn" type="button" onClick={() => void copy(post.url)}>Copier le lien</button>
               <button className="btn" type="button" aria-haspopup="dialog" disabled={busy} onClick={() => openForm(post)}>Modifier</button>
