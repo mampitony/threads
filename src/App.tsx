@@ -644,7 +644,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     .map(slot => data.posts[postKey(selected, account, slot)]).filter(Boolean))
 
   return <div className="layout">
-    <header className="app-banner">Planning de Publications sur Threads</header>
+    <header className="app-banner">GESTION DE PUBLICATIONS</header>
     <aside>
       <div className="brand"><span className="brand-icon"><Icon name="calendar" /></span>Plan de posts</div>
       <nav aria-label="Navigation principale">
@@ -671,9 +671,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       </div>}
       {page === 'planning' ? <>
         <header className="top">
-          <div><p className="eyebrow">Gestion des publications</p><h1>Planning des publications</h1>
-            <p className="sub">Organise tes posts du matin, du midi et du soir pour chaque compte.</p></div>
-          <button className="btn" onClick={() => notice(exportCsv(data) ? 'Planning exporté.' : 'Fichier CSV exporté avec les en-têtes.')}>
+          <button className="btn" style={{ marginInlineStart: 'auto' }} onClick={() => notice(exportCsv(data) ? 'Planning exporté.' : 'Fichier CSV exporté avec les en-têtes.')}>
             <Icon name="export" />Exporter en CSV
           </button>
         </header>
