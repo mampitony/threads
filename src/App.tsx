@@ -670,11 +670,6 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         }}>Importer mon ancien planning</button>
       </div>}
       {page === 'planning' ? <>
-        <header className="top">
-          <button className="btn" style={{ marginInlineStart: 'auto' }} onClick={() => notice(exportCsv(data) ? 'Planning exporté.' : 'Fichier CSV exporté avec les en-têtes.')}>
-            <Icon name="export" />Exporter en CSV
-          </button>
-        </header>
         <WeekPicker selected={selected} onSelect={setSelected} />
         <div className="stats">
           <div className="stat"><b>{accounts.length}</b><span>Comptes affichés</span></div>
@@ -705,6 +700,11 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
               onEdit={slot => setEditor({ type: 'post', account, slot, date: selected })} />)}
           </div>
         </section>
+        <footer className="actions" style={{ marginBlockStart: 24 }}>
+          <button className="btn" onClick={() => notice(exportCsv(data) ? 'Planning exporté.' : 'Fichier CSV exporté avec les en-têtes.')}>
+            <Icon name="export" />Exporter en CSV
+          </button>
+        </footer>
       </> : page === 'accounts' ? <>
         <header className="top">
           <div><p className="eyebrow">Gestion des publications</p><h1>Comptes</h1>
