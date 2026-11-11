@@ -1,7 +1,8 @@
 import { sharedPlanningRequest } from './sharedPlanning'
 import type { PlanningSnapshot } from './sharedPlanning'
 import { PendingAccounts } from './PendingAccounts'
-import { canonicalPublication, publicationKey } from './threads'
+import { canonicalPublication, publicationKey, threadsLink } from './threads'
+import { SubmittedPosts } from './SubmittedPosts'
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { Modal } from './Modal'
@@ -11,7 +12,7 @@ import {
   dateKey, emptyPost, exportCsv, formatDate, fromKey, loadPlanning, postKey, initialPlanning as emptyWorkspace,
   readPlanning, shiftDate, slots, todayKey, webUrl,
 } from './planning'
-import type { Account, CaptionTarget, Model, Planning, Post, Slot, TylanReference } from './planning'
+import type { Account, CaptionTarget, Model, Planning, Post, Slot, SubmittedPost, TylanReference } from './planning'
 
 const symbols = {
   calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18m-13 5h2m4 0h2m-8 3h2" /></>,
@@ -411,7 +412,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const [selected, setSelected] = useState('2026-11-10')
   const [filter, setFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
-  const [page, setPage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals'>('dashboard')
+  const [page, setPage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals' | 'submissions'>('dashboard')
   const [editor, setEditor] = useState<Editor | null>(null)
   const [message, setMessage] = useState(initial.error)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -621,6 +622,35 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     return result === 'conflict' ? 'Rattache d’abord les comptes de ce modèle à un autre groupe.' : ''
   }
 
+  async function saveSubmittedPost({ url, agent }: SubmittedPost) {
+    if (!agent || agent.length > 150) return 'Renseigne le nom de l’agent.'
+    const link = threadsLink(url)
+    if (!link || link.username || link.password || link.port || url.length > 2000
+      || !publicationKey(link.href).startsWith('threads:')) {
+      return 'Colle un lien de publication ou de partage Threads valide.'
+    }
+    link.search = ''
+    link.hash = ''
+    let canonicalUrl: string
+    try {
+      canonicalUrl = await canonicalPublication(link.href)
+    } catch {
+      return 'Ouvre le lien de partage dans Threads et colle l’adresse directe du post.'
+    }
+    const key = publicationKey(canonicalUrl)
+    let conflict = ''
+    const result = await commit(current => {
+      const submittedPosts = current.submittedPosts ?? []
+      const duplicate = submittedPosts.find(post => publicationKey(post.url) === key)
+      if (duplicate) {
+        conflict = 'Ce post est déjà enregistré par ' + duplicate.agent + '.'
+        return null
+      }
+      return { ...current, submittedPosts: [{ url: canonicalUrl, agent }, ...submittedPosts] }
+    })
+    return result === 'saved' ? '' : conflict || 'Impossible d’enregistrer le lien. Réessaie.'
+  }
+
   async function saveReference(fields: Omit<TylanReference, 'id'>, id?: string) {
     let url: string
     const resolved = new Map<string, string>()
@@ -761,6 +791,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         <button aria-current={page === 'planning' ? 'page' : undefined} onClick={() => setPage('planning')}><Icon name="calendar" />Planning</button>
         <button aria-current={page === 'accounts' ? 'page' : undefined} onClick={() => setPage('accounts')}><Icon name="people" />Comptes</button>
         <button aria-current={page === 'tylan' ? 'page' : undefined} onClick={() => setPage('tylan')}><Icon name="references" />Scrapping Tylan</button>
+        <button aria-current={page === 'submissions' ? 'page' : undefined} onClick={() => setPage('submissions')}><Icon name="references" />Liens à transmettre</button>
         {isAdmin && <button aria-current={page === 'approvals' ? 'page' : undefined}
           onClick={() => setPage('approvals')}><Icon name="people" />Gestion des accès</button>}
       </nav>
@@ -841,7 +872,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
             </div>
           </section>)}
         </div>
-      </> : page === 'approvals' && isAdmin ? <PendingAccounts email={email} /> : <Tylan data={data} selectedDate={selected} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
+      </> : page === 'submissions' ? <SubmittedPosts posts={data.submittedPosts ?? []} onSave={saveSubmittedPost} />
+        : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
+        : <Tylan data={data} selectedDate={selected} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>
     {openGroup && <Modal title={openGroup.name} onClose={() => setEditor(null)}>
       <div className="account-actions">

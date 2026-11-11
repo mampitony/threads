@@ -19,12 +19,15 @@ export type CaptionUse = {
 }
 export type CaptionTarget = { accountId: string; modelId: string; date: string; slot: Slot }
 
+export type SubmittedPost = { url: string; agent: string }
+
 export type Planning = {
   accounts: Account[]
   models: Model[]
   posts: Record<string, Post>
   references: TylanReference[]
   captionUses: CaptionUse[]
+  submittedPosts?: SubmittedPost[]
 }
 
 const legacyStorageKey = 'planning-des-publications-v1'
