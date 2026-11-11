@@ -1,7 +1,7 @@
 import { sharedPlanningRequest } from './sharedPlanning'
 import type { PlanningSnapshot } from './sharedPlanning'
 import { PendingAccounts } from './PendingAccounts'
-import { canonicalPublication, publicationKey, threadsLink } from './threads'
+import { canonicalPublication, lookupPublicPost, publicationKey, threadsLink } from './threads'
 import { SubmittedPosts } from './SubmittedPosts'
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
@@ -622,15 +622,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     return result === 'conflict' ? 'Rattache d’abord les comptes de ce modèle à un autre groupe.' : ''
   }
 
-  async function saveSubmittedPost({ url, agent, reactions, publishedOn }: SubmittedPost, previous?: SubmittedPost) {
+  async function saveSubmittedPost({ url, agent }: Pick<SubmittedPost, 'url' | 'agent'>, previous?: SubmittedPost) {
     if (!agent || agent.length > 150) return 'Renseigne le nom de l’agent.'
-    if (reactions !== undefined && (!Number.isSafeInteger(reactions) || reactions < 0)) {
-      return 'Saisis un nombre entier de réactions supérieur ou égal à zéro.'
-    }
     const today = todayKey()
-    if (publishedOn !== undefined && (!isDateKey(publishedOn) || publishedOn > today)) {
-      return 'Saisis une date de publication valide, au plus tard aujourd’hui.'
-    }
     const link = threadsLink(url)
     if (!link || link.username || link.password || link.port || url.length > 2000
       || !publicationKey(link.href).startsWith('threads:')) {
@@ -638,13 +632,17 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     }
     link.search = ''
     link.hash = ''
-    let canonicalUrl: string
-    try {
-      canonicalUrl = await canonicalPublication(link.href)
-    } catch {
+    const publicPost = await lookupPublicPost(link.href).catch(() => null)
+    const canonicalUrl = publicPost?.url ?? link.href
+    const key = publicationKey(canonicalUrl)
+    if (!key.startsWith('threads:post:')) {
       return 'Ouvre le lien de partage dans Threads et colle l’adresse directe du post.'
     }
-    const key = publicationKey(canonicalUrl)
+    const samePost = previous && publicationKey(previous.url) === key
+    const reactions = publicPost?.likes ?? (samePost ? previous.reactions : undefined)
+    const receivedDate = publicPost?.publishedOn
+    const publishedOn = receivedDate && isDateKey(receivedDate) && receivedDate <= today
+      ? receivedDate : samePost ? previous.publishedOn : undefined
     let conflict = ''
     const result = await commit(current => {
       const submittedPosts = current.submittedPosts ?? []

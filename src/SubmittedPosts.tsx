@@ -34,13 +34,11 @@ function groupPostsByAgent(posts: SubmittedPost[]) {
 
 export function SubmittedPosts({ posts, onSave, onRemove }: {
   posts: SubmittedPost[]
-  onSave: (post: SubmittedPost, previous?: SubmittedPost) => Promise<string>
+  onSave: (post: Pick<SubmittedPost, 'url' | 'agent'>, previous?: SubmittedPost) => Promise<string>
   onRemove: (post: SubmittedPost) => Promise<string>
 }) {
   const [agent, setAgent] = useState('')
   const [url, setUrl] = useState('')
-  const [reactions, setReactions] = useState('')
-  const [publishedOn, setPublishedOn] = useState('')
   const [addedOnFilter, setAddedOnFilter] = useState('')
   const [maxAgeFilter, setMaxAgeFilter] = useState('')
   const [minReactionsFilter, setMinReactionsFilter] = useState('')
@@ -68,8 +66,6 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
       const message = await onSave({
         url: url.trim(),
         agent: agent.trim(),
-        reactions: reactions === '' ? undefined : Number(reactions),
-        publishedOn: publishedOn || undefined,
       }, editing ?? undefined)
       if (message) setError(message)
       else {
@@ -88,8 +84,6 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
     setEditing(post ?? null)
     setAgent(post?.agent ?? lastAddingAgent.current)
     setUrl(post?.url ?? '')
-    setReactions(String(post?.reactions ?? ''))
-    setPublishedOn(post?.publishedOn ?? '')
     setError('')
     setFeedback('')
     setFormOpen(true)
@@ -141,15 +135,12 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
           disabled={busy} onChange={event => setAgent(event.target.value)} /></label>
         <label>Lien du post Threads<input required type="url" maxLength={2000} value={url}
           disabled={busy} onChange={event => setUrl(event.target.value)} /></label>
-        <label>Nombre de réactions (facultatif)<input type="number" min="0" max={Number.MAX_SAFE_INTEGER}
-          step="1" value={reactions} disabled={busy} onChange={event => setReactions(event.target.value)} /></label>
-        <label>Date de publication (facultative)<input type="date" max={today} value={publishedOn}
-          disabled={busy} onChange={event => setPublishedOn(event.target.value)} /></label>
+        <p className="sub">La date de publication et les réactions sont récupérées automatiquement quand Threads les rend accessibles.</p>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="actions">
           <button className="btn" type="button" disabled={busy} onClick={closeForm}>Annuler</button>
           <button className="btn primary" type="submit" disabled={busy}>
-            {saving ? 'Vérification…' : editing ? 'Enregistrer la modification' : 'Ajouter le lien'}
+            {saving ? 'Récupération des données…' : editing ? 'Enregistrer la modification' : 'Ajouter le lien'}
           </button>
         </div>
       </form>

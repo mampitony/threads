@@ -65,6 +65,70 @@ function postImageUrl(post) {
   return null
 }
 
+function publicPostFields(html, code) {
+  let likes = null
+  let publishedOn = null
+  for (const script of html.matchAll(/<script\b[^>]*\btype=["']application\/json["'][^>]*>([\s\S]*?)<\/script\s*>/gi)) {
+    if (!script[1].includes(code)) continue
+    let root
+    try { root = JSON.parse(script[1]) } catch { continue }
+    const pending = [root]
+    while (pending.length) {
+      const item = pending.pop()
+      if (!item || typeof item !== 'object') continue
+      if (item.code === code || item.shortcode === code) {
+        if (Number.isSafeInteger(item.like_count) && item.like_count >= 0) likes ??= item.like_count
+        if (Number.isSafeInteger(item.taken_at) && item.taken_at > 0 && item.taken_at < 253402300800) {
+          publishedOn ??= new Intl.DateTimeFormat('sv-SE', { timeZone: 'Indian/Antananarivo' })
+            .format(new Date(item.taken_at * 1000))
+        }
+        if (likes !== null && publishedOn !== null) return { likes, publishedOn }
+      }
+      for (const value of Object.values(item)) {
+        if (value && typeof value === 'object') pending.push(value)
+      }
+    }
+  }
+  return { likes, publishedOn }
+}
+
+async function readPublicPost(post, fetcher) {
+  const signal = AbortSignal.timeout(6000)
+  let url = post.url
+  for (let hops = 0; hops < 3; hops++) {
+    const response = await fetcher(url, { redirect: 'manual', signal, headers: { Accept: 'text/html' } })
+    if (redirectStatuses.has(response.status)) {
+      await response.body?.cancel()
+      const location = response.headers.get('location')
+      const next = location ? parseThreadsLink(location, url) : null
+      if (next?.code !== post.code) break
+      url = next.url
+      continue
+    }
+    if (!response.ok || !response.body) {
+      await response.body?.cancel()
+      break
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let html = ''
+    let bytes = 0
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) return publicPostFields(html + decoder.decode(), post.code)
+        bytes += value.byteLength
+        if (bytes > 6_000_000) return publicPostFields(html, post.code)
+        html += decoder.decode(value, { stream: true })
+      }
+    } finally {
+      await reader.cancel().catch(() => {})
+      reader.releaseLock()
+    }
+  }
+  return { likes: null, publishedOn: null }
+}
+
 export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false) {
   return async (request, response, next) => {
     const path = request.url ?? '/'
@@ -99,6 +163,10 @@ export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false
     }
 
     if (resolveOnly) return reply(response, 200, { url: post.url.href })
+    if (incoming.searchParams.get('public') === '1') {
+      const fields = await readPublicPost(post, fetcher).catch(() => ({ likes: null, publishedOn: null }))
+      return reply(response, 200, { url: post.url.href, ...fields })
+    }
     if (!apiKey?.trim()) {
       return reply(response, 503, { error: deployed
         ? 'Ajoute SCRAPEATLAS_API_KEY dans les variables Production de Vercel, puis redéploie le projet.'

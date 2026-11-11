@@ -23,9 +23,10 @@ export function publicationKey(value: string) {
   return url.href
 }
 
-export async function lookupThreads(url: string, resolveOnly = false, signal?: AbortSignal) {
+export async function lookupThreads(url: string, resolveOnly = false, signal?: AbortSignal, publicOnly = false) {
   const query = new URLSearchParams({ url })
   if (resolveOnly) query.set('resolve', '1')
+  if (publicOnly) query.set('public', '1')
   const response = await fetch('/api/threads-likes?' + query, {
     headers: { 'x-threads-lookup': '1' },
     signal,
@@ -33,6 +34,7 @@ export async function lookupThreads(url: string, resolveOnly = false, signal?: A
   const result: {
     url?: string
     likes?: number | null
+    publishedOn?: string | null
     comments?: number | null
     caption?: string | null
     author?: string | null
@@ -42,6 +44,10 @@ export async function lookupThreads(url: string, resolveOnly = false, signal?: A
   if (response.status === 401) window.dispatchEvent(new Event('planning-session-expired'))
   if (!response.ok) throw new Error(result.error || 'Les données Threads sont indisponibles.')
   return result
+}
+
+export function lookupPublicPost(url: string) {
+  return lookupThreads(url, false, undefined, true)
 }
 
 export async function canonicalPublication(value: string) {
