@@ -97,11 +97,8 @@ function AccountCard({ account, date, posts, onEdit }: {
           </div>
           {post ? <>
             {details && <div className="slot-detail">{details}</div>}
-            {(likes != null || comments != null) && <div className="slot-detail">
-              {[
-                likes != null ? likes + ' J’aime' : '',
-                comments != null ? comments + (comments === 1 ? ' commentaire' : ' commentaires') : '',
-              ].filter(Boolean).join(' · ')}
+            {(url || likes != null || comments != null) && <div className="slot-detail">
+              {likes ?? '—'} J’aime · {comments ?? '—'} {comments === 1 ? 'commentaire' : 'commentaires'}
             </div>}
             {post.caption && <div className="slot-detail caption">{post.caption}</div>}
             {url && <a className="slot-detail" href={url} target="_blank" rel="noopener noreferrer">Ouvrir le post ↗</a>}
@@ -171,7 +168,7 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
     <p className="sub">{account.name} · {slot} · {formatDate(fromKey(date), {
       day: 'numeric', month: 'long', year: 'numeric',
     })}</p>
-    <p className="sub">Relève les compteurs sur Threads et saisis-les ici.</p>
+    <p className="sub">À l’enregistrement, les compteurs laissés vides sont récupérés si Threads les rend accessibles.</p>
     <form onSubmit={submit}>
       <label>Lien du post<input name="url" disabled={saving} type="url" maxLength={2000}
         placeholder="https://www.threads.com/…" value={url} onChange={event => {
@@ -525,6 +522,15 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
 
   async function savePost(target: Extract<Editor, { type: 'post' }>, post: Post) {
     const key = postKey(target.date, target.account, target.slot)
+    if ((post.likes == null || post.comments == null) && threadsLink(post.url)
+      && publicationKey(post.url).startsWith('threads:')) {
+      const metrics = await lookupPublicPost(post.url).catch(() => null)
+      post = {
+        ...post,
+        likes: post.likes ?? metrics?.likes ?? undefined,
+        comments: post.comments ?? metrics?.comments ?? undefined,
+      }
+    }
     const filled = Boolean(post.count || post.caption || post.url || post.owner || post.imageUrl || post.likes != null || post.comments != null)
     const result = await commit(current => {
       const posts = { ...current.posts }

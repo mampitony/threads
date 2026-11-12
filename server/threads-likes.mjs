@@ -67,6 +67,7 @@ function postImageUrl(post) {
 
 function publicPostFields(html, code) {
   let likes = null
+  let comments = null
   let publishedOn = null
   for (const script of html.matchAll(/<script\b[^>]*\btype=["']application\/json["'][^>]*>([\s\S]*?)<\/script\s*>/gi)) {
     if (!script[1].includes(code)) continue
@@ -78,18 +79,20 @@ function publicPostFields(html, code) {
       if (!item || typeof item !== 'object') continue
       if (item.code === code || item.shortcode === code) {
         if (Number.isSafeInteger(item.like_count) && item.like_count >= 0) likes ??= item.like_count
+        const replyCount = item.text_post_app_info?.direct_reply_count
+        if (Number.isSafeInteger(replyCount) && replyCount >= 0) comments ??= replyCount
         if (Number.isSafeInteger(item.taken_at) && item.taken_at > 0 && item.taken_at < 253402300800) {
           publishedOn ??= new Intl.DateTimeFormat('sv-SE', { timeZone: 'Indian/Antananarivo' })
             .format(new Date(item.taken_at * 1000))
         }
-        if (likes !== null && publishedOn !== null) return { likes, publishedOn }
+        if (likes !== null && comments !== null && publishedOn !== null) return { likes, comments, publishedOn }
       }
       for (const value of Object.values(item)) {
         if (value && typeof value === 'object') pending.push(value)
       }
     }
   }
-  return { likes, publishedOn }
+  return { likes, comments, publishedOn }
 }
 
 async function readPublicPost(post, fetcher) {
@@ -126,7 +129,7 @@ async function readPublicPost(post, fetcher) {
       reader.releaseLock()
     }
   }
-  return { likes: null, publishedOn: null }
+  return { likes: null, comments: null, publishedOn: null }
 }
 
 export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false) {
@@ -164,7 +167,7 @@ export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false
 
     if (resolveOnly) return reply(response, 200, { url: post.url.href })
     if (incoming.searchParams.get('public') === '1') {
-      const fields = await readPublicPost(post, fetcher).catch(() => ({ likes: null, publishedOn: null }))
+      const fields = await readPublicPost(post, fetcher).catch(() => ({ likes: null, comments: null, publishedOn: null }))
       return reply(response, 200, { url: post.url.href, ...fields })
     }
     if (!apiKey?.trim()) {
