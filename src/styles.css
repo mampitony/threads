@@ -911,7 +911,7 @@ textarea {
 .agency-title {
   display: flex;
   align-items: center;
-  gap: clamp(6px, 1vw, 14px);
+  gap: clamp(10px, 2.5vw, 36px);
 }
 
 .agency-logo {
