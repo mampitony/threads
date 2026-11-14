@@ -20,6 +20,11 @@ function validSubmittedPosts(posts) {
     if (!object(post) || !text(post.agent) || !post.agent.trim() || post.agent.length > 150
       || !webLink(post.url) || post.url.length > 2000 || !optionalCount(post.reactions)
       || !optionalDate(post.addedOn) || !optionalDate(post.publishedOn)) return false
+    if (post.addedAt !== undefined) {
+      if (!text(post.addedAt) || post.addedAt.length !== 24) return false
+      const addedAt = new Date(post.addedAt)
+      if (!Number.isFinite(addedAt.getTime()) || addedAt.toISOString() !== post.addedAt) return false
+    }
     const url = new URL(post.url)
     const code = /^\/@[\w.]+\/post\/([\w-]+)\/?$/.exec(url.pathname)?.[1]
     if (url.protocol !== 'https:' || !/^(www\.)?threads\.(com|net)$/.test(url.hostname)

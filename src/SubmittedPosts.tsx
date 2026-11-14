@@ -5,6 +5,9 @@ import { formatDate, fromKey, todayKey } from './planning'
 import type { SubmittedPost } from './planning'
 
 const reactionFormat = new Intl.NumberFormat('fr-FR')
+const addedTimeFormat = new Intl.DateTimeFormat('fr-FR', {
+  timeStyle: 'short', timeZone: 'Indian/Antananarivo',
+})
 const millisecondsPerDay = 86_400_000
 
 function filterPosts(posts: SubmittedPost[], today: string, addedOn: string, maxAge: string, minReactions: string) {
@@ -174,6 +177,8 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
                 : reactionFormat.format(post.reactions) + (post.reactions > 1 ? ' réactions' : ' réaction')}</p>
               <p className="sub">
                 {post.addedOn ? 'Ajouté le ' + formatDate(fromKey(post.addedOn), { dateStyle: 'medium' }) : 'Date d’ajout inconnue'}
+                {post.addedAt && Number.isFinite(Date.parse(post.addedAt))
+                  ? ' à ' + addedTimeFormat.format(new Date(post.addedAt)) : ''}
                 {' · '}
                 {post.publishedOn ? 'Publié le ' + formatDate(fromKey(post.publishedOn), { dateStyle: 'medium' }) : 'Date de publication inconnue'}
               </p>

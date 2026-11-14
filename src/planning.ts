@@ -24,6 +24,7 @@ export type SubmittedPost = {
   agent: string
   reactions?: number
   addedOn?: string
+  addedAt?: string
   publishedOn?: string
 }
 
@@ -90,9 +91,9 @@ export function loadPlanning(storageKey: string) {
   }
 }
 
-export const todayKey = () => new Intl.DateTimeFormat('sv-SE', {
+export const todayKey = (date = new Date()) => new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'Indian/Antananarivo',
-}).format(new Date())
+}).format(date)
 
 export const fromKey = (date: string) => new Date(date + 'T12:00:00Z')
 export const dateKey = (date: Date) => date.toISOString().slice(0, 10)

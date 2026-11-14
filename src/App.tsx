@@ -654,6 +654,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     if (!key.startsWith('threads:post:')) {
       return 'Ouvre le lien de partage dans Threads et colle l’adresse directe du post.'
     }
+    const addedAt = new Date()
     const samePost = previous && publicationKey(previous.url) === key
     const reactions = publicPost?.likes ?? (samePost ? previous.reactions : undefined)
     const receivedDate = publicPost?.publishedOn
@@ -664,7 +665,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       const submittedPosts = current.submittedPosts ?? []
       const index = previous ? submittedPosts.findIndex(post =>
         post.url === previous.url && post.agent === previous.agent && post.reactions === previous.reactions
-        && post.addedOn === previous.addedOn && post.publishedOn === previous.publishedOn) : -1
+        && post.addedOn === previous.addedOn && post.addedAt === previous.addedAt
+        && post.publishedOn === previous.publishedOn) : -1
       if (previous && index === -1) {
         conflict = 'Ce lien a été modifié ou supprimé. Rouvre la fiche depuis la liste.'
         return null
@@ -674,7 +676,11 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         conflict = 'Ce post est déjà enregistré par ' + duplicate.agent + '.'
         return null
       }
-      const updated = { url: canonicalUrl, agent, reactions, publishedOn, addedOn: previous ? previous.addedOn : today }
+      const updated = {
+        url: canonicalUrl, agent, reactions, publishedOn,
+        addedOn: previous ? previous.addedOn : todayKey(addedAt),
+        addedAt: previous ? previous.addedAt : addedAt.toISOString(),
+      }
       return {
         ...current,
         submittedPosts: previous
@@ -690,7 +696,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       const submittedPosts = current.submittedPosts ?? []
       const remaining = submittedPosts.filter(post =>
         post.url !== previous.url || post.agent !== previous.agent || post.reactions !== previous.reactions
-        || post.addedOn !== previous.addedOn || post.publishedOn !== previous.publishedOn)
+        || post.addedOn !== previous.addedOn || post.addedAt !== previous.addedAt
+        || post.publishedOn !== previous.publishedOn)
       if (remaining.length === submittedPosts.length) return null
       return { ...current, submittedPosts: remaining }
     })
