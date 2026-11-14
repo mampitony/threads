@@ -43,6 +43,14 @@ export function openSqliteAuth(databasePath) {
   }
 
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_profiles (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      display_name TEXT NOT NULL,
+      photo TEXT NOT NULL
+    )
+  `)
+
   const sqlite = {
     get: (sql, ...params) => db.prepare(sql).get(...params),
     all: (sql, ...params) => db.prepare(sql).all(...params),

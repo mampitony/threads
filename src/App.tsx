@@ -1,3 +1,4 @@
+import { AgentProfile } from './AgentProfile'
 import { ImportThreadsButton } from './ImportThreadsButton'
 import { sharedPlanningRequest } from './sharedPlanning'
 import type { PlanningSnapshot } from './sharedPlanning'
@@ -416,7 +417,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const [selected, setSelected] = useState('2026-11-10')
   const [filter, setFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
-  const [page, setPage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals' | 'submissions'>('dashboard')
+  const [page, setPage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile'>('dashboard')
   const [editor, setEditor] = useState<Editor | null>(null)
   const [message, setMessage] = useState(initial.error)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -914,6 +915,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       </nav>
       <div className="account-session">
         <span className="sub">{email}</span>
+        <button className="btn" type="button" aria-current={page === 'profile' ? 'page' : undefined}
+          onClick={() => setPage('profile')}>Mon profil</button>
         <button className="btn" type="button" onClick={onLogout}>Se déconnecter</button>
       </div>
       <div className="aside-foot"><span className="dot" /><span>{shared ? 'Planning partagé avec l’équipe' : 'Données enregistrées dans ce navigateur'}</span></div>
@@ -926,7 +929,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           if (window.confirm('Rendre ce planning accessible à tous les comptes approuvés ?')) void importPreviousPlanning()
         }}>Importer mon ancien planning</button>
       </div>}
-      {page === 'planning' ? <>
+      {page === 'profile' ? <AgentProfile email={email} /> : page === 'planning' ? <>
         <WeekPicker selected={selected} onSelect={setSelected} />
         <div className="stats">
           <div className="stat"><b>{accounts.length}</b><span>Comptes affichés</span></div>

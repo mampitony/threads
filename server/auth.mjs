@@ -118,6 +118,36 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
     }
 
 
+    if (path === '/api/auth/profile') {
+      if (!session) return json(res, 401, { error: 'Reconnecte-toi pour accéder à ton profil.' })
+      if (!trustedRequest) return json(res, 403, { error: 'Requête non autorisée.' })
+      try {
+        if (req.method === 'GET') {
+          const profile = await db.get(
+            'SELECT display_name AS name, photo FROM agent_profiles WHERE user_id = ?', session.id)
+          return json(res, 200, profile ?? { name: '', photo: '' })
+        }
+        if (req.method !== 'PUT') return json(res, 405, { error: 'Méthode non autorisée.' })
+        const body = await readJson(req, 210_000)
+        const name = typeof body?.name === 'string' ? body.name.trim() : ''
+        const photo = body?.photo
+        if (!name || name.length > 100 || typeof photo !== 'string' || photo.length > 200_000
+          || (photo && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(photo))) {
+          return json(res, 400, { error: 'Nom ou photo de profil invalide.' })
+        }
+        await db.run(
+          `INSERT INTO agent_profiles (user_id, display_name, photo) VALUES (?, ?, ?)
+           ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name, photo = excluded.photo`,
+          session.id, name, photo)
+        return json(res, 200, { name, photo })
+      } catch (error) {
+        if (error?.code === '42P01') {
+          return json(res, 503, { error: 'Exécute server/schema-profiles.sql dans Neon pour activer les profils.' })
+        }
+        throw error
+      }
+    }
+
     if (path === '/api/auth/accounts') {
       if (!session) return json(res, 401, { error: 'Connecte-toi pour accéder au panneau.' })
       if (session.access !== 'admin' || !trustedRequest) {
