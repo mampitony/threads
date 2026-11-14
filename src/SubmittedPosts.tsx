@@ -43,6 +43,7 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
   const [agent, setAgent] = useState('')
   const [url, setUrl] = useState('')
   const [addedOnFilter, setAddedOnFilter] = useState('')
+  const [agentFilter, setAgentFilter] = useState('')
   const [maxAgeFilter, setMaxAgeFilter] = useState('')
   const [minReactionsFilter, setMinReactionsFilter] = useState('')
   const [saving, setSaving] = useState(false)
@@ -55,9 +56,11 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
   const lastAddingAgent = useRef('')
   const busy = saving || Boolean(removing)
   const today = todayKey()
-  const filtered = filterPosts(posts, today, addedOnFilter, maxAgeFilter, minReactionsFilter)
+  const agents = groupPostsByAgent(posts)
+  const selectedAgent = agents.find(([key]) => key === agentFilter)
+  const filtered = filterPosts(selectedAgent?.[1].posts ?? posts, today, addedOnFilter, maxAgeFilter, minReactionsFilter)
   const groups = groupPostsByAgent(filtered)
-  const hasFilters = Boolean(addedOnFilter || maxAgeFilter || minReactionsFilter)
+  const hasFilters = Boolean(selectedAgent || addedOnFilter || maxAgeFilter || minReactionsFilter)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -152,6 +155,10 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
     <section className="settings" aria-labelledby="submitted-posts-title">
       <h2 id="submitted-posts-title">Liens enregistrés</h2>
       <div className="account-actions" role="group" aria-label="Filtrer les liens" style={{ alignItems: 'end', marginBlock: 12 }}>
+        <label>Agent<select value={selectedAgent?.[0] ?? ''} onChange={event => setAgentFilter(event.target.value)}>
+          <option value="">Tous les agents</option>
+          {agents.map(([key, group]) => <option key={key} value={key}>{group.name}</option>)}
+        </select></label>
         <label>Date d’ajout<input type="date" value={addedOnFilter}
           onChange={event => setAddedOnFilter(event.target.value)} /></label>
         <label>Âge maximal du post (jours)<input type="number" min="0" step="1" value={maxAgeFilter}
@@ -160,6 +167,7 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
           onChange={event => setMinReactionsFilter(event.target.value)} /></label>
         {hasFilters && <button className="btn" type="button" onClick={() => {
           setAddedOnFilter('')
+          setAgentFilter('')
           setMaxAgeFilter('')
           setMinReactionsFilter('')
         }}>Effacer les filtres</button>}
