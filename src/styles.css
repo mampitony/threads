@@ -50,7 +50,9 @@ a {
 .layout {
   --banner-font-size: clamp(1rem, 2.4vw, 1.375rem);
   --banner-line-height: calc(var(--banner-font-size) * 1.35);
-  --banner-height: calc(var(--banner-line-height) + 29px);
+  --agency-logo-size: clamp(36px, 5vw, 56px);
+  --banner-padding-block: 8px;
+  --banner-height: calc(max(var(--banner-line-height), var(--agency-logo-size)) + 2 * var(--banner-padding-block) + 1px);
   min-height: 100vh;
   display: grid;
   grid-template-columns: 232px minmax(0,1fr);
@@ -62,7 +64,7 @@ a {
   top: 0;
   z-index: 3;
   grid-column: 1 / -1;
-  padding: 14px 20px;
+  padding: var(--banner-padding-block) 20px;
   background: #e8f3ff;
   border-bottom: 1px solid #c9dff4;
   color: #173b60;
@@ -893,7 +895,8 @@ textarea {
 
 @media (max-width: 640px) {
   .profile-banner {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 36%);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 30%);
+    gap: 6px;
     padding-inline: 10px;
   }
 
@@ -901,19 +904,19 @@ textarea {
     grid-column: 1;
     text-align: left;
     white-space: nowrap;
-    font-size: clamp(.68rem, 2.8vw, 1rem);
+    font-size: clamp(.65rem, 2.65vw, 1rem);
   }
 }
 
 .agency-title {
   display: flex;
   align-items: center;
-  gap: .45rem;
+  gap: clamp(6px, 1vw, 14px);
 }
 
 .agency-logo {
-  width: var(--banner-line-height);
-  height: var(--banner-line-height);
+  width: var(--agency-logo-size);
+  height: var(--agency-logo-size);
   border-radius: 50%;
   object-fit: contain;
   flex: none;
