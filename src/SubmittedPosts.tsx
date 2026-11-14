@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
 import { formatDate, fromKey, todayKey } from './planning'
@@ -38,7 +38,7 @@ function groupPostsByAgent(posts: SubmittedPost[]) {
 export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
   posts: SubmittedPost[]
   defaultAgentName: string
-  onSave: (post: Pick<SubmittedPost, 'url' | 'agent'>, previous?: SubmittedPost) => Promise<string>
+  onSave: (post: Pick<SubmittedPost, 'url' | 'agent'>, previous?: SubmittedPost) => Promise<string | { message: string; duplicateUrl: string }>
   onRemove: (post: SubmittedPost) => Promise<string>
 }) {
   const [agent, setAgent] = useState('')
@@ -54,6 +54,22 @@ export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
   const [error, setError] = useState('')
   const [removeError, setRemoveError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [duplicateUrl, setDuplicateUrl] = useState('')
+  const [highlightedUrl, setHighlightedUrl] = useState('')
+  const highlightedRow = useRef<HTMLLIElement>(null)
+
+  useEffect(() => {
+    if (!highlightedUrl) return
+    const frame = requestAnimationFrame(() => {
+      highlightedRow.current?.scrollIntoView({ block: 'center' })
+      highlightedRow.current?.focus({ preventScroll: true })
+    })
+    const timer = window.setTimeout(() => setHighlightedUrl(''), 5000)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
+  }, [highlightedUrl])
   const lastAddingAgent = useRef('')
   const busy = saving || Boolean(removing)
   const today = todayKey()
@@ -68,13 +84,17 @@ export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
     if (busy) return
     setSaving(true)
     setError('')
+    setDuplicateUrl('')
     setFeedback('')
     try {
       const message = await onSave({
         url: url.trim(),
         agent: agent.trim(),
       }, editing ?? undefined)
-      if (message) setError(message)
+      if (typeof message === 'object') {
+        setError(message.message)
+        setDuplicateUrl(message.duplicateUrl)
+      } else if (message) setError(message)
       else {
         if (!editing) lastAddingAgent.current = agent.trim()
         setUrl('')
@@ -92,6 +112,7 @@ export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
     setAgent(post?.agent ?? (defaultAgentName || lastAddingAgent.current))
     setUrl(post?.url ?? '')
     setError('')
+    setDuplicateUrl('')
     setFeedback('')
     setFormOpen(true)
   }
@@ -102,6 +123,7 @@ export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
     setEditing(null)
     setUrl('')
     setError('')
+    setDuplicateUrl('')
   }
 
   async function remove(post: SubmittedPost) {
@@ -137,7 +159,7 @@ export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
         onClick={() => openForm()}>Ajouter un lien</button>
     </header>
     {formOpen && <Modal title={editing ? 'Modifier le lien' : 'Ajouter un lien'} onClose={closeForm}>
-      <form onSubmit={submit} onChange={() => { setError(''); setFeedback('') }}>
+      <form onSubmit={submit} onChange={() => { setError(''); setDuplicateUrl(''); setFeedback('') }}>
         <label>Nom de l’agent<input list="agent-names" placeholder="Saisir ou choisir un nom" required maxLength={150} value={agent}
           disabled={busy} onChange={event => setAgent(event.target.value)} /></label>
         <label>Lien du post Threads<input required type="url" maxLength={2000} value={url}
@@ -145,6 +167,21 @@ export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
         <p className="sub">La date de publication et les réactions sont récupérées automatiquement quand Threads les rend accessibles.</p>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="actions">
+          {duplicateUrl && <button className="btn" type="button" disabled={busy} onClick={() => {
+            const target = duplicateUrl
+            closeForm()
+            if (!posts.some(post => post.url === target)) {
+              setFeedback('Ce lien ne figure plus dans la liste.')
+              return
+            }
+            if (!filtered.some(post => post.url === target)) {
+              setAgentFilter('')
+              setAddedOnFilter('')
+              setMaxAgeFilter('')
+              setMinReactionsFilter('')
+            }
+            setHighlightedUrl(target)
+          }}>Voir le lien existant</button>}
           <button className="btn" type="button" disabled={busy} onClick={closeForm}>Annuler</button>
           <button className="btn primary" type="submit" disabled={busy}>
             {saving ? 'Récupération des données…' : editing ? 'Enregistrer la modification' : 'Ajouter le lien'}
@@ -179,7 +216,11 @@ export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
       {groups.map(([key, group]) => <section key={key} style={{ marginBlockStart: 16 }}>
         <h3 style={{ overflowWrap: 'anywhere' }}>{group.name} · {group.posts.length} {group.posts.length === 1 ? 'lien' : 'liens'}</h3>
         <ul className="account-list">
-          {group.posts.map(post => <li key={post.url} style={{ flexWrap: 'wrap' }}>
+          {group.posts.map(post => <li key={post.url} tabIndex={-1} ref={post.url === highlightedUrl ? highlightedRow : undefined}
+            style={{ flexWrap: 'wrap', backgroundColor: post.url === highlightedUrl ? '#fef3c7' : undefined,
+              boxShadow: post.url === highlightedUrl ? 'inset 4px 0 #b45309' : undefined,
+              paddingInlineStart: post.url === highlightedUrl ? 10 : undefined,
+              transition: 'background-color 350ms ease' }}>
             <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
               <a href={post.url} target="_blank" rel="noopener noreferrer">{post.url}</a>
               <p className="sub">{post.reactions === undefined ? 'Réactions non renseignées'

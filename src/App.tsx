@@ -683,7 +683,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     const receivedDate = publicPost?.publishedOn
     const publishedOn = receivedDate && isDateKey(receivedDate) && receivedDate <= today
       ? receivedDate : samePost ? previous.publishedOn : undefined
-    let conflict = ''
+    let conflict: string | { message: string; duplicateUrl: string } = ''
     const result = await commit(current => {
       const submittedPosts = current.submittedPosts ?? []
       const index = previous ? submittedPosts.findIndex(post =>
@@ -696,7 +696,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       }
       const duplicate = submittedPosts.find((post, position) => position !== index && publicationKey(post.url) === key)
       if (duplicate) {
-        conflict = 'Ce post est déjà enregistré par ' + duplicate.agent + '.'
+        conflict = { message: 'Ce post est déjà enregistré par ' + duplicate.agent + '.', duplicateUrl: duplicate.url }
         return null
       }
       const updated = {
