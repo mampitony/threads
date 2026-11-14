@@ -420,6 +420,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const [editor, setEditor] = useState<Editor | null>(null)
   const [message, setMessage] = useState(initial.error)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const refreshingCounters = useRef(false)
+  const [counterStatus, setCounterStatus] = useState('')
+  const [counterBusy, setCounterBusy] = useState(false)
 
   function applySnapshot(snapshot: PlanningSnapshot) {
     if (snapshot.revision < latestRevision.current) return
@@ -808,8 +811,69 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     !activeModel || account.modelId === activeModel)
   const activeFilter = modelAccounts.some(account => account.id === filter) ? filter : ''
   const accounts = modelAccounts.filter(account => !activeFilter || account.id === activeFilter)
-  const posts = accounts.flatMap(account => slots
-    .map(slot => data.posts[postKey(selected, account, slot)]).filter(Boolean))
+  const visiblePostKeys = accounts.flatMap(account => slots.map(slot => postKey(selected, account, slot)))
+  const posts = visiblePostKeys.map(key => data.posts[key]).filter(Boolean)
+  const counterTargets = visiblePostKeys.flatMap(key => {
+    const post = data.posts[key]
+    if (!post || !threadsLink(post.url)) return []
+    const identity = publicationKey(post.url)
+    return identity.startsWith('threads:') ? [{ key, post, identity }] : []
+  })
+
+  async function refreshCounters() {
+    if (refreshingCounters.current || !counterTargets.length) return
+    refreshingCounters.current = true
+    setCounterBusy(true)
+    const links = new Map(counterTargets.map(({ post, identity }) => [identity, post.url]))
+    const results = new Map<string, Awaited<ReturnType<typeof lookupPublicPost>>>()
+    let limited = false
+    let checked = 0
+    try {
+      for (const [identity, url] of links) {
+        setCounterStatus('Lecture Threads : ' + (checked + 1) + ' / ' + links.size)
+        try {
+          const metrics = await lookupPublicPost(url)
+          if (metrics.likes != null || metrics.comments != null) results.set(identity, metrics)
+        } catch (error) {
+          if (typeof error === 'object' && error !== null && 'status' in error && error.status === 429) {
+            limited = true
+            break
+          }
+        }
+        checked++
+        if (checked < links.size) await new Promise(resolve => window.setTimeout(resolve, 1000))
+      }
+
+      let updated = 0
+      if (results.size) {
+        const saved = await commit(current => {
+          updated = 0
+          const next = { ...current.posts }
+          for (const { key, post, identity } of counterTargets) {
+            const latest = current.posts[key]
+            const metrics = results.get(identity)
+            if (!latest || latest.url !== post.url || !metrics) continue
+            const likes = latest.likes === post.likes ? metrics.likes ?? latest.likes : latest.likes
+            const comments = latest.comments === post.comments ? metrics.comments ?? latest.comments : latest.comments
+            if (latest.likes === likes && latest.comments === comments) continue
+            next[key] = { ...latest, likes, comments }
+            updated++
+          }
+          return updated ? { ...current, posts: next } : null
+        })
+        if (saved !== 'saved' && updated > 0) {
+          setCounterStatus('Impossible d’enregistrer les compteurs récupérés. Réessaie.')
+          return
+        }
+      }
+      setCounterStatus(updated + ' créneau(x) mis à jour. ' + results.size + ' / ' + links.size
+        + ' lien(s) avec des compteurs disponibles.'
+        + (limited ? ' Threads limite temporairement les demandes. Réessaie plus tard.' : ''))
+    } finally {
+      refreshingCounters.current = false
+      setCounterBusy(false)
+    }
+  }
   const planningReady = !shared || revision !== null
   const groups = [
     ...data.models.map(model => ({ id: model.id, name: model.name, accounts: data.accounts.filter(account => account.modelId === model.id) })),
@@ -866,6 +930,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           <div className="section-head">
             <h2 id="date-title">{formatDate(fromKey(selected), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</h2>
             <div className="account-filters">
+              <button type="button" className="btn" disabled={counterBusy || !counterTargets.length}
+                onClick={() => void refreshCounters()}>{counterBusy ? 'Actualisation…' : 'Actualiser les compteurs'}</button>
               <select aria-label="Filtrer par modèle" value={activeModel} onChange={event => {
                 setModelFilter(event.target.value)
                 setFilter('')
@@ -880,6 +946,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
               </select>
             </div>
           </div>
+          {counterStatus && <p className="sub" role="status">{counterStatus}</p>}
           {accounts.length === 0 && <p className="empty">Aucun compte pour ce modèle.</p>}
           <div className="accounts">
             {accounts.map(account => <AccountCard key={account.id} account={account} date={selected} posts={data.posts}

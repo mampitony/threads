@@ -42,7 +42,9 @@ export async function lookupThreads(url: string, resolveOnly = false, signal?: A
     error?: string
   } = await response.json()
   if (response.status === 401) window.dispatchEvent(new Event('planning-session-expired'))
-  if (!response.ok) throw new Error(result.error || 'Les données Threads sont indisponibles.')
+  if (!response.ok) {
+    throw Object.assign(new Error(result.error || 'Les données Threads sont indisponibles.'), { status: response.status })
+  }
   return result
 }
 

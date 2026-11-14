@@ -26,6 +26,7 @@ async function resolveSharedPost(post, fetcher) {
     const response = await fetcher(post.url, { redirect: 'manual', signal })
     const location = response.headers.get('location')
     await response.body?.cancel()
+    if (response.status === 429) throw Object.assign(new Error('Threads limite temporairement les demandes.'), { status: 429 })
     if (!redirectStatuses.has(response.status) || !location) return null
 
     const destination = parseThreadsLink(location, post.url)
@@ -104,6 +105,10 @@ async function readPublicPost(post, fetcher) {
   let url = post.url
   for (let hops = 0; hops < 3; hops++) {
     const response = await fetcher(url, { redirect: 'manual', signal, headers: { Accept: 'text/html' } })
+    if (response.status === 429) {
+      await response.body?.cancel()
+      return null
+    }
     if (redirectStatuses.has(response.status)) {
       await response.body?.cancel()
       const location = response.headers.get('location')
@@ -159,7 +164,8 @@ export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false
     if (!post.code) {
       try {
         post = await resolveSharedPost(link, fetcher)
-      } catch {
+      } catch (error) {
+        if (error?.status === 429) return reply(response, 429, { error: 'Threads limite temporairement les demandes. Réessaie plus tard.' })
         post = null
       }
       if (!post) {
@@ -172,6 +178,7 @@ export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false
     if (resolveOnly) return reply(response, 200, { url: post.url.href })
     if (incoming.searchParams.get('public') === '1') {
       const fields = await readPublicPost(post, fetcher).catch(() => ({ likes: null, comments: null, publishedOn: null }))
+      if (!fields) return reply(response, 429, { error: 'Threads limite temporairement les demandes. Réessaie plus tard.' })
       const author = ('author' in fields && fields.author) || post.url.pathname.split('/')[1].slice(1)
       return reply(response, 200, { url: post.url.href, ...fields, author })
     }
