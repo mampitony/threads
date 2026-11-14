@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS agency_branding (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  logo TEXT NOT NULL
+);

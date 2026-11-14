@@ -51,6 +51,11 @@ export function openSqliteAuth(databasePath) {
     )
   `)
 
+  db.exec(`CREATE TABLE IF NOT EXISTS agency_branding (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  logo TEXT NOT NULL
+);`)
+
   const sqlite = {
     get: (sql, ...params) => db.prepare(sql).get(...params),
     all: (sql, ...params) => db.prepare(sql).all(...params),

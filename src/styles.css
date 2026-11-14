@@ -904,3 +904,17 @@ textarea {
     font-size: clamp(.68rem, 2.8vw, 1rem);
   }
 }
+
+.agency-title {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.agency-logo {
+  width: var(--banner-line-height);
+  height: var(--banner-line-height);
+  border-radius: 50%;
+  object-fit: contain;
+  flex: none;
+}

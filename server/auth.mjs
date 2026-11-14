@@ -118,6 +118,39 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
     }
 
 
+    if (path === '/api/auth/agency-logo') {
+      if (!session) return json(res, 401, { error: 'Reconnecte-toi pour accéder au panneau.' })
+      if (!trustedRequest) return json(res, 403, { error: 'Requête non autorisée.' })
+      try {
+        if (req.method === 'GET') {
+          const row = await db.get('SELECT logo FROM agency_branding WHERE id = 1')
+          return json(res, 200, { logo: row?.logo ?? '' })
+        }
+        if (req.method !== 'PUT') return json(res, 405, { error: 'Méthode non autorisée.' })
+        if (session.access !== 'admin') return json(res, 403, { error: 'Accès réservé aux administrateurs.' })
+        const body = await readJson(req, 210_000)
+        const logo = body?.logo
+        if (typeof logo !== 'string' || logo.length > 200_000
+          || (logo && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(logo))) {
+          return json(res, 400, { error: 'Logo invalide.' })
+        }
+        const saved = await db.transaction(async transaction => {
+          const currentSession = await transaction.get(sessionQuery, hashedToken, Date.now())
+          if (currentSession?.access !== 'admin') return
+          await transaction.run(
+            `INSERT INTO agency_branding (id, logo) VALUES (1, ?)
+             ON CONFLICT (id) DO UPDATE SET logo = excluded.logo`, logo)
+          return true
+        })
+        return saved ? json(res, 200, { logo }) : json(res, 403, { error: 'Accès réservé aux administrateurs.' })
+      } catch (error) {
+        if (error?.code === '42P01') {
+          return json(res, 503, { error: 'Exécute server/schema-agency-logo.sql dans Neon pour activer la personnalisation du logo.' })
+        }
+        throw error
+      }
+    }
+
     if (path === '/api/auth/profile') {
       if (!session) return json(res, 401, { error: 'Reconnecte-toi pour accéder à ton profil.' })
       if (!trustedRequest) return json(res, 403, { error: 'Requête non autorisée.' })

@@ -16,7 +16,7 @@ export async function profileRequest(profile?: Profile, signal?: AbortSignal) {
   return result
 }
 
-async function resizePhoto(file: File) {
+export async function resizePhoto(file: File) {
   const bitmap = await createImageBitmap(file)
   try {
     const scale = Math.min(1, 320 / Math.max(bitmap.width, bitmap.height))

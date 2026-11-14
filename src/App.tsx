@@ -1,3 +1,4 @@
+import { AgencyLogoSettings, agencyLogoRequest } from './AgencyLogo'
 import { AgentProfile, profileRequest } from './AgentProfile'
 import type { Profile } from './AgentProfile'
 import { ImportThreadsButton } from './ImportThreadsButton'
@@ -421,6 +422,15 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const [editor, setEditor] = useState<Editor | null>(null)
   const [message, setMessage] = useState(initial.error)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [agencyLogo, setAgencyLogo] = useState('')
+  useEffect(() => {
+    const controller = new AbortController()
+    agencyLogoRequest(undefined, controller.signal).then(logo => {
+      if (!controller.signal.aborted) setAgencyLogo(logo)
+    }).catch(() => {})
+    return () => controller.abort()
+  }, [])
+
   const [agentProfile, setAgentProfile] = useState<Profile | null>(null)
   const [profileError, setProfileError] = useState('')
   const defaultAgentName = agentProfile?.name.trim() ?? ''
@@ -924,7 +934,10 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   return <div className="layout">
     <datalist id="agent-names">{knownAgentNames.map(name => <option key={name} value={name} />)}</datalist>
     <header className="app-banner profile-banner">
-      <span className="banner-title">GESTION DE PUBLICATIONS</span>
+      <span className="banner-title agency-title">
+        <img className="agency-logo" src={agencyLogo || '/logo-agence.png'} alt="Logo de l’agence" />
+        <span>GESTION DE PUBLICATIONS</span>
+      </span>
       <button className="banner-profile" type="button" aria-label={'Mon profil : ' + agentName}
         title={agentName} onClick={() => setPage('profile')}>
         {agentProfile?.photo
@@ -961,8 +974,10 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           if (window.confirm('Rendre ce planning accessible à tous les comptes approuvés ?')) void importPreviousPlanning()
         }}>Importer mon ancien planning</button>
       </div>}
-      {page === 'profile' ? <AgentProfile email={email} savedProfile={agentProfile}
-        loadError={profileError} onSave={setAgentProfile} /> : page === 'planning' ? <>
+      {page === 'profile' ? <><AgentProfile email={email} savedProfile={agentProfile}
+        loadError={profileError} onSave={setAgentProfile} />
+        {isAdmin && <AgencyLogoSettings onSave={setAgencyLogo} />}
+      </> : page === 'planning' ? <>
         <WeekPicker selected={selected} onSelect={setSelected} />
         <div className="stats">
           <div className="stat"><b>{accounts.length}</b><span>Comptes affichés</span></div>
