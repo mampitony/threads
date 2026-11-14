@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { FormEvent } from 'react'
 
-type Profile = { name: string; photo: string }
+export type Profile = { name: string; photo: string }
 
-async function profileRequest(profile?: Profile) {
+export async function profileRequest(profile?: Profile, signal?: AbortSignal) {
   const response = await fetch('/api/auth/profile', {
     method: profile ? 'PUT' : 'GET',
     headers: { 'x-planning-auth': '1', 'Content-Type': 'application/json' },
     body: profile ? JSON.stringify(profile) : undefined,
+    signal,
   })
   const result = await response.json() as Profile & { error?: string }
   if (response.status === 401) window.dispatchEvent(new Event('planning-session-expired'))
@@ -33,21 +34,17 @@ async function resizePhoto(file: File) {
   }
 }
 
-export function AgentProfile({ email }: { email: string }) {
-  const [profile, setProfile] = useState<Profile | null>(null)
+export function AgentProfile({ email, savedProfile, loadError, onSave }: {
+  email: string
+  savedProfile: Profile | null
+  loadError: string
+  onSave: (profile: Profile) => void
+}) {
+  const [draft, setProfile] = useState<Profile | null>(null)
+  const profile = draft ?? savedProfile
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-
-  useEffect(() => {
-    let active = true
-    profileRequest().then(result => {
-      if (active) setProfile({ ...result, name: result.name || email.split('@')[0] })
-    }).catch(failure => {
-      if (active) setError(failure instanceof Error ? failure.message : 'Le profil est indisponible.')
-    })
-    return () => { active = false }
-  }, [email])
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -56,7 +53,9 @@ export function AgentProfile({ email }: { email: string }) {
     setError('')
     setMessage('')
     try {
-      setProfile(await profileRequest(profile))
+      const saved = await profileRequest(profile)
+      onSave(saved)
+      setProfile(null)
       setMessage('Profil enregistré.')
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Impossible d’enregistrer le profil.')
@@ -69,7 +68,8 @@ export function AgentProfile({ email }: { email: string }) {
     <header className="top"><h1>Mon profil</h1></header>
     <section className="settings">
       <p className="sub">{email}</p>
-      {!profile && !error && <p role="status">Chargement du profil…</p>}
+      {!profile && !loadError && <p role="status">Chargement du profil…</p>}
+      {!profile && loadError && <p className="form-error" role="alert">{loadError}</p>}
       {profile && <form onSubmit={save}>
         {profile.photo && <img src={profile.photo} alt="Ta photo de profil" width={96} height={96}
           style={{ objectFit: 'cover', borderRadius: '50%' }} />}

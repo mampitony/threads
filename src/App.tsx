@@ -1,4 +1,5 @@
-import { AgentProfile } from './AgentProfile'
+import { AgentProfile, profileRequest } from './AgentProfile'
+import type { Profile } from './AgentProfile'
 import { ImportThreadsButton } from './ImportThreadsButton'
 import { sharedPlanningRequest } from './sharedPlanning'
 import type { PlanningSnapshot } from './sharedPlanning'
@@ -421,6 +422,21 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const [editor, setEditor] = useState<Editor | null>(null)
   const [message, setMessage] = useState(initial.error)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const [agentProfile, setAgentProfile] = useState<Profile | null>(null)
+  const [profileError, setProfileError] = useState('')
+  const agentName = agentProfile?.name || email.split('@')[0]
+
+  useEffect(() => {
+    const controller = new AbortController()
+    profileRequest(undefined, controller.signal).then(profile => {
+      if (!controller.signal.aborted) setAgentProfile({ ...profile, name: profile.name || email.split('@')[0] })
+    }).catch(error => {
+      if (!controller.signal.aborted) {
+        setProfileError(error instanceof Error ? error.message : 'Le profil est indisponible.')
+      }
+    })
+    return () => controller.abort()
+  }, [email])
   const refreshingCounters = useRef(false)
   const [counterStatus, setCounterStatus] = useState('')
   const [counterBusy, setCounterBusy] = useState(false)
@@ -900,7 +916,16 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   }
 
   return <div className="layout">
-    <header className="app-banner">GESTION DE PUBLICATIONS</header>
+    <header className="app-banner profile-banner">
+      <span className="banner-title">GESTION DE PUBLICATIONS</span>
+      <button className="banner-profile" type="button" aria-label={'Mon profil : ' + agentName}
+        title={agentName} onClick={() => setPage('profile')}>
+        {agentProfile?.photo
+          ? <img className="banner-avatar" src={agentProfile.photo} alt="" />
+          : <span className="banner-avatar" aria-hidden="true">{Array.from(agentName)[0]?.toLocaleUpperCase('fr')}</span>}
+        <span className="banner-agent-name">{agentName}</span>
+      </button>
+    </header>
     <aside>
       <div className="brand"><span className="brand-icon"><Icon name="calendar" /></span>Plan de posts</div>
       <nav aria-label="Navigation principale">
@@ -929,7 +954,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           if (window.confirm('Rendre ce planning accessible à tous les comptes approuvés ?')) void importPreviousPlanning()
         }}>Importer mon ancien planning</button>
       </div>}
-      {page === 'profile' ? <AgentProfile email={email} /> : page === 'planning' ? <>
+      {page === 'profile' ? <AgentProfile email={email} savedProfile={agentProfile}
+        loadError={profileError} onSave={setAgentProfile} /> : page === 'planning' ? <>
         <WeekPicker selected={selected} onSelect={setSelected} />
         <div className="stats">
           <div className="stat"><b>{accounts.length}</b><span>Comptes affichés</span></div>

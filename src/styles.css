@@ -846,3 +846,61 @@ textarea {
 .account-session + .aside-foot {
   margin-top: 0;
 }
+
+.profile-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.banner-title {
+  grid-column: 2;
+}
+
+.banner-profile {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  height: var(--banner-line-height);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: 700 .875rem/1.2 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.banner-avatar {
+  display: grid;
+  place-items: center;
+  width: var(--banner-line-height);
+  height: var(--banner-line-height);
+  flex: none;
+  border-radius: 50%;
+  background: #c9dff4;
+  object-fit: cover;
+}
+
+.banner-agent-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .profile-banner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 36%);
+    padding-inline: 10px;
+  }
+
+  .banner-title {
+    grid-column: 1;
+    text-align: left;
+    white-space: nowrap;
+    font-size: clamp(.68rem, 2.8vw, 1rem);
+  }
+}
