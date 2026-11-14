@@ -113,12 +113,12 @@ function AccountCard({ account, date, posts, onEdit }: {
   </article>
 }
 
-function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
+function PostEditor({ account, slot, date, post, defaultAgentName, onClose, onSave }: {
   account: Account
   slot: Slot
   date: string
   post?: Post
-  owners: string[]
+  defaultAgentName: string
   onClose: () => void
   onSave: (post: Post) => Promise<string>
 }) {
@@ -195,8 +195,7 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
         defaultValue={post?.caption} /></label>
       <label>Nombre de posts<input name="count" disabled={busy} type="number" min="0" max="999999" step="1"
         placeholder={link ? '1' : '0'} defaultValue={post?.count} /></label>
-      <label>Responsable<input name="owner" disabled={busy} maxLength={100} list="owners" placeholder="Saisir ou choisir un nom" defaultValue={post?.owner} /></label>
-      <datalist id="owners">{owners.map(owner => <option key={owner} value={owner} />)}</datalist>
+      <label>Responsable<input name="owner" disabled={busy} maxLength={100} list="agent-names" placeholder="Saisir ou choisir un nom" defaultValue={post?.owner || defaultAgentName} /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
         {post && <button className="btn danger" type="button" disabled={busy} onClick={async () => {
@@ -424,12 +423,19 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [agentProfile, setAgentProfile] = useState<Profile | null>(null)
   const [profileError, setProfileError] = useState('')
-  const agentName = agentProfile?.name || email.split('@')[0]
+  const defaultAgentName = agentProfile?.name.trim() ?? ''
+  const agentName = defaultAgentName || email.split('@')[0]
+  const knownAgentNames = [...new Set([
+    defaultAgentName,
+    ...Object.values(data.posts).map(post => post.owner),
+    ...data.references.map(reference => reference.agent),
+    ...(data.submittedPosts ?? []).map(post => post.agent),
+  ].map(name => name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'))
 
   useEffect(() => {
     const controller = new AbortController()
     profileRequest(undefined, controller.signal).then(profile => {
-      if (!controller.signal.aborted) setAgentProfile({ ...profile, name: profile.name || email.split('@')[0] })
+      if (!controller.signal.aborted) setAgentProfile(profile)
     }).catch(error => {
       if (!controller.signal.aborted) {
         setProfileError(error instanceof Error ? error.message : 'Le profil est indisponible.')
@@ -916,6 +922,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   }
 
   return <div className="layout">
+    <datalist id="agent-names">{knownAgentNames.map(name => <option key={name} value={name} />)}</datalist>
     <header className="app-banner profile-banner">
       <span className="banner-title">GESTION DE PUBLICATIONS</span>
       <button className="banner-profile" type="button" aria-label={'Mon profil : ' + agentName}
@@ -1021,10 +1028,10 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
             </div>
           </section>)}
         </div>
-      </> : page === 'submissions' ? <SubmittedPosts posts={data.submittedPosts ?? []}
+      </> : page === 'submissions' ? <SubmittedPosts posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName}
         onSave={saveSubmittedPost} onRemove={removeSubmittedPost} />
         : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
-        : <Tylan data={data} selectedDate={selected} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
+        : <Tylan data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>
     {openGroup && <Modal title={openGroup.name} onClose={() => setEditor(null)}>
       <div className="account-actions">
@@ -1049,7 +1056,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       onClose={() => setEditor(null)} onSave={(accountId, date, slot) => saveSuggestion(editor, accountId, date, slot)} />}
     {editor?.type === 'post' && <PostEditor account={editor.account} slot={editor.slot} date={editor.date}
       post={data.posts[postKey(editor.date, editor.account, editor.slot)]}
-      owners={[...new Set(Object.values(data.posts).map(post => post.owner).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'))}
+      defaultAgentName={defaultAgentName}
       onClose={() => setEditor(null)} onSave={post => savePost(editor, post)} />}
     {editor?.type === 'account' && <AccountEditor account={editor.account} models={data.models} modelId={editor.modelId}
       onClose={() => setEditor(null)} onSave={(name, handle, modelId) => saveAccount(editor.account, name, handle, modelId)} />}

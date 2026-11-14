@@ -12,8 +12,9 @@ type SaveReference = (
   id?: string,
 ) => Promise<string>
 
-function ReferenceEditor({ reference, onClose, onSave }: {
+function ReferenceEditor({ reference, defaultAgentName, onClose, onSave }: {
   reference?: TylanReference
+  defaultAgentName: string
   onClose: () => void
   onSave: SaveReference
 }) {
@@ -67,7 +68,7 @@ function ReferenceEditor({ reference, onClose, onSave }: {
       <label>Nombre de réactions<input name="reactions" disabled={busy} type="number" required min="0" step="1"
         defaultValue={reference?.reactions} placeholder="0" /></label>
       <label>Agent qui a enregistré la publication<input name="agent" disabled={busy} required maxLength={150}
-        defaultValue={reference?.agent} placeholder="Nom de l’agent" /></label>
+        list="agent-names" defaultValue={reference?.agent || defaultAgentName} placeholder="Saisir ou choisir un nom" /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
         <button className="btn" type="button" disabled={busy} onClick={onClose}>Annuler</button>
@@ -77,9 +78,10 @@ function ReferenceEditor({ reference, onClose, onSave }: {
   </Modal>
 }
 
-export function Tylan({ data, selectedDate, onSave, onDelete, onUse }: {
+export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, onUse }: {
   data: Planning
   selectedDate: string
+  defaultAgentName: string
   onSave: SaveReference
   onDelete: (id: string) => void
   onUse: (reference: TylanReference, target: CaptionTarget) => Promise<string>
@@ -145,6 +147,6 @@ export function Tylan({ data, selectedDate, onSave, onDelete, onUse }: {
     </section>
     {selected && <CaptionUseEditor reference={selected} accounts={accounts} models={models}
       selectedDate={selectedDate} onUse={onUse} onClose={() => setSelected(null)} />}
-    {editor && <ReferenceEditor reference={editor.reference} onClose={() => setEditor(null)} onSave={onSave} />}
+    {editor && <ReferenceEditor reference={editor.reference} defaultAgentName={defaultAgentName} onClose={() => setEditor(null)} onSave={onSave} />}
   </>
 }

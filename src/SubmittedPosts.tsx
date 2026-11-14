@@ -35,8 +35,9 @@ function groupPostsByAgent(posts: SubmittedPost[]) {
   return [...groups.entries()].sort(([, a], [, b]) => a.name.localeCompare(b.name, 'fr'))
 }
 
-export function SubmittedPosts({ posts, onSave, onRemove }: {
+export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
   posts: SubmittedPost[]
+  defaultAgentName: string
   onSave: (post: Pick<SubmittedPost, 'url' | 'agent'>, previous?: SubmittedPost) => Promise<string>
   onRemove: (post: SubmittedPost) => Promise<string>
 }) {
@@ -88,7 +89,7 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
 
   function openForm(post?: SubmittedPost) {
     setEditing(post ?? null)
-    setAgent(post?.agent ?? lastAddingAgent.current)
+    setAgent(post?.agent ?? (defaultAgentName || lastAddingAgent.current))
     setUrl(post?.url ?? '')
     setError('')
     setFeedback('')
@@ -137,7 +138,7 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
     </header>
     {formOpen && <Modal title={editing ? 'Modifier le lien' : 'Ajouter un lien'} onClose={closeForm}>
       <form onSubmit={submit} onChange={() => { setError(''); setFeedback('') }}>
-        <label>Nom de l’agent<input required maxLength={150} value={agent}
+        <label>Nom de l’agent<input list="agent-names" placeholder="Saisir ou choisir un nom" required maxLength={150} value={agent}
           disabled={busy} onChange={event => setAgent(event.target.value)} /></label>
         <label>Lien du post Threads<input required type="url" maxLength={2000} value={url}
           disabled={busy} onChange={event => setUrl(event.target.value)} /></label>

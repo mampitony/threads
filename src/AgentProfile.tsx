@@ -41,7 +41,7 @@ export function AgentProfile({ email, savedProfile, loadError, onSave }: {
   onSave: (profile: Profile) => void
 }) {
   const [draft, setProfile] = useState<Profile | null>(null)
-  const profile = draft ?? savedProfile
+  const profile = draft ?? (savedProfile && { ...savedProfile, name: savedProfile.name || email.split('@')[0] })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
