@@ -186,7 +186,11 @@ export function SubmittedPosts({ posts, onSave, onRemove }: {
               <p className="sub">
                 {post.addedOn ? 'Ajouté le ' + formatDate(fromKey(post.addedOn), { dateStyle: 'medium' }) : 'Date d’ajout inconnue'}
                 {post.addedAt && Number.isFinite(Date.parse(post.addedAt))
-                  ? ' à ' + addedTimeFormat.format(new Date(post.addedAt)) : ''}
+                  ? <> à <time dateTime={post.addedAt} style={{
+                    display: 'inline-block', padding: '1px 6px', borderRadius: 4,
+                    backgroundColor: '#fde68a', color: '#713f12', fontWeight: 700,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>{addedTimeFormat.format(new Date(post.addedAt))}</time></> : null}
                 {' · '}
                 {post.publishedOn ? 'Publié le ' + formatDate(fromKey(post.publishedOn), { dateStyle: 'medium' }) : 'Date de publication inconnue'}
               </p>
