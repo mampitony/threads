@@ -66,6 +66,8 @@ function postImageUrl(post) {
 }
 
 function publicPostFields(html, code) {
+  let caption = null
+  let author = null
   let likes = null
   let comments = null
   let publishedOn = null
@@ -79,20 +81,22 @@ function publicPostFields(html, code) {
       if (!item || typeof item !== 'object') continue
       if (item.code === code || item.shortcode === code) {
         if (Number.isSafeInteger(item.like_count) && item.like_count >= 0) likes ??= item.like_count
+        if (typeof item.caption?.text === 'string') caption ??= item.caption.text.trim() || null
+        if (typeof item.user?.username === 'string') author ??= item.user.username.trim() || null
         const replyCount = item.text_post_app_info?.direct_reply_count
         if (Number.isSafeInteger(replyCount) && replyCount >= 0) comments ??= replyCount
         if (Number.isSafeInteger(item.taken_at) && item.taken_at > 0 && item.taken_at < 253402300800) {
           publishedOn ??= new Intl.DateTimeFormat('sv-SE', { timeZone: 'Indian/Antananarivo' })
             .format(new Date(item.taken_at * 1000))
         }
-        if (likes !== null && comments !== null && publishedOn !== null) return { likes, comments, publishedOn }
+        if (likes !== null && comments !== null && publishedOn !== null && caption !== null && author !== null) return { likes, comments, publishedOn, caption, author }
       }
       for (const value of Object.values(item)) {
         if (value && typeof value === 'object') pending.push(value)
       }
     }
   }
-  return { likes, comments, publishedOn }
+  return { likes, comments, publishedOn, caption, author }
 }
 
 async function readPublicPost(post, fetcher) {
@@ -168,7 +172,8 @@ export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false
     if (resolveOnly) return reply(response, 200, { url: post.url.href })
     if (incoming.searchParams.get('public') === '1') {
       const fields = await readPublicPost(post, fetcher).catch(() => ({ likes: null, comments: null, publishedOn: null }))
-      return reply(response, 200, { url: post.url.href, ...fields })
+      const author = ('author' in fields && fields.author) || post.url.pathname.split('/')[1].slice(1)
+      return reply(response, 200, { url: post.url.href, ...fields, author })
     }
     if (!apiKey?.trim()) {
       return reply(response, 503, { error: deployed

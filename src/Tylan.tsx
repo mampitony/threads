@@ -1,3 +1,4 @@
+import { ImportThreadsButton } from './ImportThreadsButton'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
@@ -18,10 +19,12 @@ function ReferenceEditor({ reference, onClose, onSave }: {
 }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const busy = saving || importing
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (saving) return
+    if (busy) return
     const form = event.currentTarget
     const data = new FormData(form)
     const read = (name: string) => String(data.get(name) ?? '').trim()
@@ -52,22 +55,23 @@ function ReferenceEditor({ reference, onClose, onSave }: {
     else onClose()
   }
 
-  return <Modal title={reference ? 'Modifier la publication' : 'Ajouter une publication de référence'} onClose={() => { if (!saving) onClose() }}>
+  return <Modal title={reference ? 'Modifier la publication' : 'Ajouter une publication de référence'} onClose={() => { if (!busy) onClose() }}>
     <form onSubmit={submit} onChange={() => setError('')}>
-      <label>Légende<textarea name="caption" disabled={saving} maxLength={5000}
+      <label>Légende<textarea name="caption" disabled={busy} maxLength={5000}
         defaultValue={reference?.caption} placeholder="Texte de la publication" /></label>
-      <label>Auteur<input name="author" disabled={saving} required maxLength={150}
+      <label>Auteur<input name="author" disabled={busy} required maxLength={150}
         defaultValue={reference?.author} placeholder="Nom ou @identifiant de l’auteur" /></label>
-      <label>Lien de la publication<input name="url" disabled={saving} type="url" required maxLength={2000}
+      <label>Lien de la publication<input name="url" disabled={busy} type="url" required maxLength={2000}
         defaultValue={reference?.url} placeholder="https://…" /></label>
-      <label>Nombre de réactions<input name="reactions" disabled={saving} type="number" required min="0" step="1"
+      <ImportThreadsButton reactionField="reactions" disabled={busy} onBusy={setImporting} />
+      <label>Nombre de réactions<input name="reactions" disabled={busy} type="number" required min="0" step="1"
         defaultValue={reference?.reactions} placeholder="0" /></label>
-      <label>Agent qui a enregistré la publication<input name="agent" disabled={saving} required maxLength={150}
+      <label>Agent qui a enregistré la publication<input name="agent" disabled={busy} required maxLength={150}
         defaultValue={reference?.agent} placeholder="Nom de l’agent" /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
-        <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
-        <button className="btn primary" type="submit" disabled={saving}>{saving ? 'Vérification…' : 'Enregistrer'}</button>
+        <button className="btn" type="button" disabled={busy} onClick={onClose}>Annuler</button>
+        <button className="btn primary" type="submit" disabled={busy}>{saving ? 'Vérification…' : 'Enregistrer'}</button>
       </div>
     </form>
   </Modal>

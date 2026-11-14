@@ -1,3 +1,4 @@
+import { ImportThreadsButton } from './ImportThreadsButton'
 import { sharedPlanningRequest } from './sharedPlanning'
 import type { PlanningSnapshot } from './sharedPlanning'
 import { PendingAccounts } from './PendingAccounts'
@@ -100,6 +101,7 @@ function AccountCard({ account, date, posts, onEdit }: {
             {(url || likes != null || comments != null) && <div className="slot-detail">
               {likes ?? '—'} J’aime · {comments ?? '—'} {comments === 1 ? 'commentaire' : 'commentaires'}
             </div>}
+            {post.author && <div className="slot-detail">Auteur : {post.author}</div>}
             {post.caption && <div className="slot-detail caption">{post.caption}</div>}
             {url && <a className="slot-detail" href={url} target="_blank" rel="noopener noreferrer">Ouvrir le post ↗</a>}
           </> : <div className="slot-detail">À renseigner</div>}
@@ -119,13 +121,15 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
   onSave: (post: Post) => Promise<string>
 }) {
   const [saving, setSaving] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const busy = saving || importing
   const [error, setError] = useState('')
   const [url, setUrl] = useState(post?.url ?? '')
   const link = url.trim()
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (saving) return
+    if (busy) return
     const form = event.currentTarget
     const values = new FormData(form)
     const rawCount = String(values.get('count')).trim()
@@ -155,6 +159,7 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
       caption: String(values.get('caption') ?? '').trim(),
       imageUrl: imageUrl || undefined,
       url: link,
+      author: String(values.get('author') ?? '').trim() || undefined,
       owner: String(values.get('owner')).trim(),
       likes,
       comments,
@@ -164,40 +169,42 @@ function PostEditor({ account, slot, date, post, owners, onClose, onSave }: {
     setSaving(false)
   }
 
-  return <Modal title="Modifier le créneau" onClose={() => { if (!saving) onClose() }}>
+  return <Modal title="Modifier le créneau" onClose={() => { if (!busy) onClose() }}>
     <p className="sub">{account.name} · {slot} · {formatDate(fromKey(date), {
       day: 'numeric', month: 'long', year: 'numeric',
     })}</p>
     <p className="sub">À l’enregistrement, les compteurs laissés vides sont récupérés si Threads les rend accessibles.</p>
     <form onSubmit={submit}>
-      <label>Lien du post<input name="url" disabled={saving} type="url" maxLength={2000}
+      <label>Lien du post<input name="url" disabled={busy} type="url" maxLength={2000}
         placeholder="https://www.threads.com/…" value={url} onChange={event => {
           event.currentTarget.setCustomValidity('')
           setUrl(event.target.value)
         }} /></label>
       {webUrl(link) && <a href={webUrl(link)} target="_blank" rel="noopener noreferrer">Ouvrir le post ↗</a>}
-      <label>J’aime<input name="likes" disabled={saving} type="number" min="0" max={Number.MAX_SAFE_INTEGER}
+      <ImportThreadsButton reactionField="likes" disabled={busy} onBusy={setImporting} />
+      <label>Auteur Threads<input name="author" disabled={busy} maxLength={150} defaultValue={post?.author} /></label>
+      <label>J’aime<input name="likes" disabled={busy} type="number" min="0" max={Number.MAX_SAFE_INTEGER}
         step="1" defaultValue={post?.likes} /></label>
-      <label>Commentaires<input name="comments" disabled={saving} type="number" min="0" max={Number.MAX_SAFE_INTEGER}
+      <label>Commentaires<input name="comments" disabled={busy} type="number" min="0" max={Number.MAX_SAFE_INTEGER}
         step="1" defaultValue={post?.comments} /></label>
-      <label>URL directe de la photo (facultatif)<input name="imageUrl" disabled={saving} type="url" maxLength={2000}
+      <label>URL directe de la photo (facultatif)<input name="imageUrl" disabled={busy} type="url" maxLength={2000}
         placeholder="https://…" defaultValue={post?.imageUrl} /></label>
-      <label>Légende +1K<textarea name="caption" disabled={saving} maxLength={5000} placeholder="Saisir une légende"
+      <label>Légende +1K<textarea name="caption" disabled={busy} maxLength={5000} placeholder="Saisir une légende"
         defaultValue={post?.caption} /></label>
-      <label>Nombre de posts<input name="count" disabled={saving} type="number" min="0" max="999999" step="1"
+      <label>Nombre de posts<input name="count" disabled={busy} type="number" min="0" max="999999" step="1"
         placeholder={link ? '1' : '0'} defaultValue={post?.count} /></label>
-      <label>Responsable<input name="owner" disabled={saving} maxLength={100} list="owners" placeholder="Saisir ou choisir un nom" defaultValue={post?.owner} /></label>
+      <label>Responsable<input name="owner" disabled={busy} maxLength={100} list="owners" placeholder="Saisir ou choisir un nom" defaultValue={post?.owner} /></label>
       <datalist id="owners">{owners.map(owner => <option key={owner} value={owner} />)}</datalist>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
-        {post && <button className="btn danger" type="button" disabled={saving} onClick={async () => {
+        {post && <button className="btn danger" type="button" disabled={busy} onClick={async () => {
           if (!window.confirm('Effacer les données de ce créneau ?')) return
           setSaving(true)
           setError(await onSave(emptyPost))
           setSaving(false)
         }}>Effacer</button>}
-        <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
-        <button className="btn primary" type="submit" disabled={saving}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
+        <button className="btn" type="button" disabled={busy} onClick={onClose}>Annuler</button>
+        <button className="btn primary" type="submit" disabled={busy}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
       </div>
     </form>
   </Modal>
@@ -531,7 +538,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         comments: post.comments ?? metrics?.comments ?? undefined,
       }
     }
-    const filled = Boolean(post.count || post.caption || post.url || post.owner || post.imageUrl || post.likes != null || post.comments != null)
+    const filled = Boolean(post.count || post.caption || post.url || post.owner || post.imageUrl || post.author || post.likes != null || post.comments != null)
     const result = await commit(current => {
       const posts = { ...current.posts }
       if (filled) posts[key] = post
