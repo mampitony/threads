@@ -19,20 +19,6 @@ const reactionFormat = new Intl.NumberFormat('fr-FR')
 const addedTimeFormat = new Intl.DateTimeFormat('fr-FR', {
   timeStyle: 'short', timeZone: 'Indian/Antananarivo',
 })
-const millisecondsPerDay = 86_400_000
-
-function filterPosts(posts: SubmittedPost[], today: string, addedOn: string, maxAge: string, minReactions: string) {
-  const todayTime = fromKey(today).getTime()
-  return posts.filter(post => {
-    if (addedOn && post.addedOn !== addedOn) return false
-    if (maxAge !== '') {
-      if (!post.publishedOn) return false
-      const age = (todayTime - fromKey(post.publishedOn).getTime()) / millisecondsPerDay
-      if (!(age >= 0 && age <= Number(maxAge))) return false
-    }
-    return minReactions === '' || (post.reactions !== undefined && post.reactions >= Number(minReactions))
-  })
-}
 
 function groupPostsByAgent(posts: SubmittedPost[]) {
   const groups = new Map<string, { name: string; posts: SubmittedPost[] }>()
@@ -60,8 +46,6 @@ export function SubmittedPosts({ today, progress, profileNames, posts, defaultAg
   const [url, setUrl] = useState('')
   const [addedOnFilter, setAddedOnFilter] = useState('')
   const [agentFilter, setAgentFilter] = useState('')
-  const [maxAgeFilter, setMaxAgeFilter] = useState('')
-  const [minReactionsFilter, setMinReactionsFilter] = useState('')
   const [saving, setSaving] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<SubmittedPost | null>(null)
@@ -94,9 +78,9 @@ export function SubmittedPosts({ today, progress, profileNames, posts, defaultAg
   const agents = groupPostsByAgent(posts)
   const selectedAgent = agents.find(([key]) => key === agentFilter)
   const dayPosts = (selectedAgent?.[1].posts ?? posts).filter(post => !day || scrapingDay(post) === day)
-  const filtered = filterPosts(dayPosts, today, addedOnFilter, maxAgeFilter, minReactionsFilter)
+  const filtered = addedOnFilter ? dayPosts.filter(post => post.addedOn === addedOnFilter) : dayPosts
   const groups = groupPostsByAgent(filtered)
-  const hasFilters = Boolean(selectedAgent || addedOnFilter || maxAgeFilter || minReactionsFilter)
+  const hasFilters = Boolean(selectedAgent || addedOnFilter)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -205,8 +189,6 @@ export function SubmittedPosts({ today, progress, profileNames, posts, defaultAg
               setDayOverride('')
               setAgentFilter('')
               setAddedOnFilter('')
-              setMaxAgeFilter('')
-              setMinReactionsFilter('')
             }
             setHighlightedUrl(target)
           }}>Voir le lien existant</button>}
@@ -220,25 +202,18 @@ export function SubmittedPosts({ today, progress, profileNames, posts, defaultAg
     <p className="sub" role="status">{feedback}</p>
     <section className="settings" aria-labelledby="submitted-posts-title">
       <h2 id="submitted-posts-title">Liens enregistrés</h2>
-      <ScrapingDayFilter today={today} day={day} onChange={setDayOverride} progress={progress} agents={profileNames} />
-      <div className="account-actions" role="group" aria-label="Filtrer les liens" style={{ alignItems: 'end', marginBlock: 12 }}>
+      <ScrapingDayFilter today={today} day={day} onChange={setDayOverride} progress={progress} agents={profileNames}>
         <label>Agent<select value={selectedAgent?.[0] ?? ''} onChange={event => setAgentFilter(event.target.value)}>
           <option value="">Tous les agents</option>
           {agents.map(([key, group]) => <option key={key} value={key}>{group.name}</option>)}
         </select></label>
         <label>Date d’ajout<input type="date" value={addedOnFilter}
           onChange={event => setAddedOnFilter(event.target.value)} /></label>
-        <label>Âge maximal du post (jours)<input type="number" min="0" step="1" value={maxAgeFilter}
-          onChange={event => setMaxAgeFilter(event.target.value)} /></label>
-        <label>Réactions minimum<input type="number" min="0" step="1" value={minReactionsFilter}
-          onChange={event => setMinReactionsFilter(event.target.value)} /></label>
         {hasFilters && <button className="btn" type="button" onClick={() => {
           setAddedOnFilter('')
           setAgentFilter('')
-          setMaxAgeFilter('')
-          setMinReactionsFilter('')
         }}>Effacer les filtres</button>}
-      </div>
+      </ScrapingDayFilter>
       {hasFilters && <p className="sub" role="status">{filtered.length} / {posts.length} liens affichés</p>}
       {removeError && <p className="form-error" role="alert">{removeError}</p>}
       {groups.length === 0 && <p className="sub">{hasFilters ? 'Aucun lien ne correspond aux filtres.' : 'Aucun lien pour cette sélection.'}</p>}

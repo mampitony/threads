@@ -1,7 +1,9 @@
+import type { ReactNode } from 'react'
 import { dailyScrapingGoal, scrapingBucket } from './planning'
 import type { scrapingProgress } from './planning'
 
-export function ScrapingDayFilter({ today, day, onChange, agents, progress }: {
+export function ScrapingDayFilter({ today, day, onChange, agents, progress, children }: {
+  children?: ReactNode
   today: string
   day: string
   onChange: (day: string | undefined) => void
@@ -10,10 +12,11 @@ export function ScrapingDayFilter({ today, day, onChange, agents, progress }: {
 }) {
   const uniqueAgents = new Map(agents.map(agent => [scrapingBucket(agent, day), agent]))
   return <>
-    <div className="account-actions" style={{ alignItems: 'end', marginBlock: 12 }}>
+    <div className="account-actions" role="group" aria-label="Filtres des publications" style={{ alignItems: 'end', marginBlock: 12 }}>
       <label>Jour de l’objectif<input type="date" value={day} onChange={event => onChange(event.target.value)} /></label>
       <button type="button" className="btn" onClick={() => onChange(undefined)} disabled={day === today}>Aujourd’hui</button>
       <button type="button" className="btn" onClick={() => onChange('')} disabled={!day}>Tout l’historique</button>
+      {children}
     </div>
     {day && uniqueAgents.size > 0 && <ul className="reference-uses" aria-label="Progression par agent"
       style={{ display: 'flex', flexWrap: 'wrap', gap: 12, listStyle: 'none', paddingInlineStart: 0 }}>
