@@ -762,14 +762,14 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     }
 
     const key = publicationKey(url)
-    let conflict = 'Cette publication n’est plus disponible dans la liste.'
+    let conflict: string | { message: string; referenceId: string } = 'Cette publication n’est plus disponible dans la liste.'
     const result = await commit(current => {
       if (id && !current.references.some(reference => reference.id === id)) return null
 
-      const duplicate = current.references.some(reference => reference.id !== id
+      const duplicate = current.references.find(reference => reference.id !== id
         && publicationKey(resolved.get(reference.url) ?? reference.url) === key)
       if (duplicate) {
-        conflict = 'Cette publication est déjà enregistrée dans Scrapping Tylan.'
+        conflict = { message: 'Cette publication est déjà enregistrée dans Scrapping Tylan.', referenceId: duplicate.id }
         return null
       }
       const unresolved = key.startsWith('threads:post:') && current.references.some(reference =>

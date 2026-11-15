@@ -1,5 +1,5 @@
 import { ImportThreadsButton } from './ImportThreadsButton'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
 import { CaptionUseEditor } from './CaptionUseEditor'
@@ -10,15 +10,17 @@ const reactionFormat = new Intl.NumberFormat('fr-FR')
 type SaveReference = (
   fields: Omit<TylanReference, 'id'>,
   id?: string,
-) => Promise<string>
+) => Promise<string | { message: string; referenceId: string }>
 
-function ReferenceEditor({ reference, defaultAgentName, onClose, onSave }: {
+function ReferenceEditor({ reference, defaultAgentName, onClose, onSave, onLocate }: {
   reference?: TylanReference
   defaultAgentName: string
   onClose: () => void
   onSave: SaveReference
+  onLocate: (id: string) => void
 }) {
   const [error, setError] = useState('')
+  const [duplicateId, setDuplicateId] = useState('')
   const [saving, setSaving] = useState(false)
   const [importing, setImporting] = useState(false)
   const busy = saving || importing
@@ -52,12 +54,15 @@ function ReferenceEditor({ reference, defaultAgentName, onClose, onSave }: {
     setSaving(true)
     const message = await onSave(fields, reference?.id)
     setSaving(false)
-    if (message) setError(message)
+    if (typeof message === 'object') {
+      setError(message.message)
+      setDuplicateId(message.referenceId)
+    } else if (message) setError(message)
     else onClose()
   }
 
   return <Modal title={reference ? 'Modifier la publication' : 'Ajouter une publication de référence'} onClose={() => { if (!busy) onClose() }}>
-    <form onSubmit={submit} onChange={() => setError('')}>
+    <form onSubmit={submit} onChange={() => { setError(''); setDuplicateId('') }}>
       <label>Légende<textarea name="caption" disabled={busy} maxLength={5000}
         defaultValue={reference?.caption} placeholder="Texte de la publication" /></label>
       <label>Auteur<input name="author" disabled={busy} required maxLength={150}
@@ -71,6 +76,8 @@ function ReferenceEditor({ reference, defaultAgentName, onClose, onSave }: {
         list="agent-names" defaultValue={reference?.agent || defaultAgentName} placeholder="Saisir ou choisir un nom" /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
+        {duplicateId && <button className="btn" type="button" disabled={busy}
+          onClick={() => onLocate(duplicateId)}>Voir la publication existante</button>}
         <button className="btn" type="button" disabled={busy} onClick={onClose}>Annuler</button>
         <button className="btn primary" type="submit" disabled={busy}>{saving ? 'Vérification…' : 'Enregistrer'}</button>
       </div>
@@ -88,6 +95,20 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
 }) {
   const [editor, setEditor] = useState<{ reference?: TylanReference } | null>(null)
   const [selected, setSelected] = useState<TylanReference | null>(null)
+  const [highlightedId, setHighlightedId] = useState('')
+  const highlightedCard = useRef<HTMLLIElement>(null)
+  useEffect(() => {
+    if (!highlightedId) return
+    const frame = requestAnimationFrame(() => {
+      highlightedCard.current?.scrollIntoView({ block: 'center' })
+      highlightedCard.current?.focus({ preventScroll: true })
+    })
+    const timer = window.setTimeout(() => setHighlightedId(''), 5000)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+    }
+  }, [highlightedId])
   const { references, accounts, models, captionUses } = data
   const accountNames = new Map(accounts.map(account => [account.id, account.name]))
   const modelNames = new Map(models.map(model => [model.id, model.name]))
@@ -105,7 +126,7 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
     <header className="top">
       <div><p className="eyebrow">Publications de référence</p><h1>Scrapping Tylan</h1>
         <p className="sub">Rassemble les publications qui peuvent servir de modèle.</p></div>
-      <button className="btn primary" onClick={() => setEditor({})}>Ajouter une publication</button>
+      <button className="btn primary" onClick={() => { setHighlightedId(''); setEditor({}) }}>Ajouter une publication</button>
     </header>
     <section aria-labelledby="tylan-list-title">
       <div className="section-head">
@@ -117,11 +138,14 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
           {references.map(reference => {
             const url = webUrl(reference.url)
             const uses = usesByReference.get(reference.id) ?? []
-            return <li key={reference.id} className="settings reference-card">
+            const highlighted = reference.id === highlightedId
+            return <li key={reference.id} className="settings reference-card" tabIndex={-1}
+              ref={highlighted ? highlightedCard : undefined}
+              style={highlighted ? { backgroundColor: '#fef3c7', boxShadow: 'inset 0 0 0 2px #b45309' } : undefined}>
               <div className="section-head">
                 <div><p className="eyebrow">Auteur</p><h3>{reference.author}</h3></div>
                 <button className="btn" aria-label={'Modifier la publication de ' + reference.author}
-                  onClick={() => setEditor({ reference })}>Modifier</button>
+                  onClick={() => { setHighlightedId(''); setEditor({ reference }) }}>Modifier</button>
               </div>
               {reference.caption && <p className="caption reference-caption">{reference.caption}</p>}
               <dl className="reference-meta">
@@ -147,6 +171,7 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
     </section>
     {selected && <CaptionUseEditor reference={selected} accounts={accounts} models={models}
       selectedDate={selectedDate} onUse={onUse} onClose={() => setSelected(null)} />}
-    {editor && <ReferenceEditor reference={editor.reference} defaultAgentName={defaultAgentName} onClose={() => setEditor(null)} onSave={onSave} />}
+    {editor && <ReferenceEditor reference={editor.reference} defaultAgentName={defaultAgentName} onClose={() => setEditor(null)} onSave={onSave}
+      onLocate={id => { setEditor(null); setHighlightedId(id) }} />}
   </>
 }
