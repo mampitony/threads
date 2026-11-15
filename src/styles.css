@@ -90,8 +90,8 @@ a {
 }
 
 aside {
-  background: #fcfdf9;
-  border-right: 1px solid var(--line);
+  background: #edf5ff;
+  border-right: 1px solid #c9dff4;
   padding: 33px 22px;
   display: flex;
   flex-direction: column;
