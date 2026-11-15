@@ -14,7 +14,7 @@ import { Tylan } from './Tylan'
 import { ModelEditor } from './Models'
 import {
   dateKey, emptyPost, exportCsv, formatDate, fromKey, loadPlanning, postKey, initialPlanning as emptyWorkspace,
-  isDateKey, nextScrapingDay, readPlanning, scrapingBucket, scrapingProgress, shiftDate, slots, todayKey, webUrl,
+  isDateKey, nextScrapingDay, readPlanning, scrapingBucket, scrapingProgress, scrapingToday, shiftDate, slots, todayKey, webUrl,
 } from './planning'
 import type { Account, CaptionTarget, Model, Planning, Post, Slot, SubmittedPost, TylanReference } from './planning'
 
@@ -415,12 +415,14 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const latestRevision = useRef(-1)
   const [syncError, setSyncError] = useState('')
   const [importing, setImporting] = useState(false)
-  const [today, setToday] = useState(todayKey)
+  const [now, setNow] = useState(() => new Date())
+  const today = todayKey(now)
+  const objectiveToday = scrapingToday(now)
   const [chosenDay, setSelected] = useState<string>()
   const selected = chosenDay ?? today
 
   useEffect(() => {
-    const updateDay = () => setToday(todayKey())
+    const updateDay = () => setNow(new Date())
     const timerId = window.setInterval(updateDay, 15_000)
     document.addEventListener('visibilitychange', updateDay)
     return () => {
@@ -736,7 +738,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         return null
       }
       assignedDay = previous && scrapingBucket(previous.agent, '') === scrapingBucket(agent, '')
-        ? previous.quotaDay : nextScrapingDay(current, agent, todayKey(addedAt))
+        ? previous.quotaDay : nextScrapingDay(current, agent, addedAt)
       const updated = {
         url: canonicalUrl, agent, reactions, publishedOn, quotaDay: assignedDay,
         addedOn: previous ? previous.addedOn : todayKey(addedAt),
@@ -815,7 +817,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
 
       const previous = current.references.find(reference => reference.id === id)
       assignedDay = previous && scrapingBucket(previous.agent, '') === scrapingBucket(fields.agent, '')
-        ? previous.quotaDay : nextScrapingDay(current, fields.agent, addedOn)
+        ? previous.quotaDay : nextScrapingDay(current, fields.agent, addedAt)
       const reference = { ...previous, ...fields, url, id: id ?? crypto.randomUUID(),
         addedOn: previous ? previous.addedOn : addedOn,
         addedAt: previous ? previous.addedAt : addedAt.toISOString(),
@@ -1104,10 +1106,10 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
             </div>
           </section>)}
         </div>
-      </> : page === 'submissions' ? <SubmittedPosts profileNames={scrapingAgents} today={today} progress={progress} posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName} storageKey={storageKey}
+      </> : page === 'submissions' ? <SubmittedPosts profileNames={scrapingAgents} today={objectiveToday} progress={progress} posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName} storageKey={storageKey}
         onSave={saveSubmittedPost} onRemove={removeSubmittedPost} />
         : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
-        : <Tylan profileNames={scrapingAgents} today={today} progress={progress} data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
+        : <Tylan profileNames={scrapingAgents} today={objectiveToday} progress={progress} data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>
     {openGroup && <Modal title={openGroup.name} onClose={() => setEditor(null)}>
       <div className="account-actions">

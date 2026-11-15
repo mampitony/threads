@@ -142,9 +142,22 @@ export function scrapingBucket(agent: string, day: string) {
   return day + '|' + agent.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr')
 }
 
-export function nextScrapingDay(planning: Planning, agent: string, today: string) {
+const scrapingHour = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Indian/Antananarivo',
+  hour: '2-digit',
+  hourCycle: 'h23',
+})
+
+export function scrapingToday(now = new Date()) {
+  const today = todayKey(now)
+  return Number(scrapingHour.format(now)) < 2
+    ? dateKey(shiftDate(fromKey(today), -1))
+    : today
+}
+
+export function nextScrapingDay(planning: Planning, agent: string, now = new Date()) {
   const { counts } = scrapingProgress([...planning.references, ...(planning.submittedPosts ?? [])])
-  let day = today
+  let day = scrapingToday(now)
   while ((counts.get(scrapingBucket(agent, day)) ?? 0) >= dailyScrapingGoal) {
     day = dateKey(shiftDate(fromKey(day), 1))
   }
