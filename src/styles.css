@@ -921,3 +921,17 @@ textarea {
   object-fit: contain;
   flex: none;
 }
+
+.account-session > .sub {
+  display: none;
+}
+
+@media (min-width: 851px) {
+  .layout > aside {
+    padding-bottom: 20px;
+  }
+
+  .account-session + .aside-foot {
+    margin-top: -26px;
+  }
+}
