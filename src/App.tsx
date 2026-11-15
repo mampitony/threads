@@ -846,8 +846,10 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
 
   const modelIds = new Set(data.models.map(model => model.id))
   const activeModel = modelFilter === 'unassigned' || modelIds.has(modelFilter) ? modelFilter : ''
-  const unassigned = data.accounts.filter(account => !account.modelId || !modelIds.has(account.modelId))
-  const modelAccounts = activeModel === 'unassigned' ? unassigned : data.accounts.filter(account =>
+  const orderedAccounts = [...data.accounts].sort((a, b) =>
+    a.name.localeCompare(b.name, 'fr', { numeric: true, sensitivity: 'base' }))
+  const unassigned = orderedAccounts.filter(account => !account.modelId || !modelIds.has(account.modelId))
+  const modelAccounts = activeModel === 'unassigned' ? unassigned : orderedAccounts.filter(account =>
     !activeModel || account.modelId === activeModel)
   const activeFilter = modelAccounts.some(account => account.id === filter) ? filter : ''
   const accounts = modelAccounts.filter(account => !activeFilter || account.id === activeFilter)
@@ -916,7 +918,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   }
   const planningReady = !shared || revision !== null
   const groups = [
-    ...data.models.map(model => ({ id: model.id, name: model.name, accounts: data.accounts.filter(account => account.modelId === model.id) })),
+    ...data.models.map(model => ({ id: model.id, name: model.name, accounts: orderedAccounts.filter(account => account.modelId === model.id) })),
     { id: null, name: 'Sans modèle', accounts: unassigned },
   ]
   const openGroup = editor?.type === 'group' ? groups.find(group => group.id === editor.modelId) : undefined
