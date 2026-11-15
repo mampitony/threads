@@ -434,7 +434,16 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   }
   const [filter, setFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
-  const [page, setPage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile'>('dashboard')
+  const [page, setActivePage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile'>('dashboard')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuButton = useRef<HTMLButtonElement>(null)
+
+  function setPage(nextPage: typeof page) {
+    setActivePage(nextPage)
+    setMenuOpen(false)
+    if (menuOpen) menuButton.current?.focus()
+  }
+
   const [editor, setEditor] = useState<Editor | null>(null)
   const [message, setMessage] = useState(initial.error)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -973,6 +982,14 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   return <div className="layout">
     <datalist id="agent-names">{knownAgentNames.map(name => <option key={name} value={name} />)}</datalist>
     <header className="app-banner profile-banner">
+      <button ref={menuButton} className="mobile-menu-toggle" type="button"
+        aria-expanded={menuOpen} aria-controls="workspace-sidebar"
+        aria-label={menuOpen ? 'Fermer le menu' : 'Ouvrir le menu'} onClick={() => setMenuOpen(!menuOpen)}>
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+          strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <path d={menuOpen ? 'M6 6l12 12M18 6L6 18' : 'M4 6h16M4 12h16M4 18h16'} />
+        </svg>
+      </button>
       <span className="banner-title agency-title">
         <img className="agency-logo" src={agencyLogo || '/logo-agence.png'} alt="Logo de l’agence" />
         <span>GESTION DE PUBLICATIONS</span>
@@ -985,7 +1002,12 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         <span className="banner-agent-name">{agentName}</span>
       </button>
     </header>
-    <aside>
+    <aside id="workspace-sidebar" data-mobile-open={menuOpen} onKeyDown={event => {
+      if (event.key === 'Escape' && menuOpen) {
+        setMenuOpen(false)
+        menuButton.current?.focus()
+      }
+    }}>
       <div className="brand"><span className="brand-icon"><Icon name="calendar" /></span>Plan de posts</div>
       <nav aria-label="Navigation principale">
         <span className="nav-label">Espace de travail</span>

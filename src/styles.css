@@ -935,3 +935,202 @@ textarea {
     margin-top: -26px;
   }
 }
+
+/* Keep long account names, links and form values within their columns. */
+.layout > main,
+.settings,
+.account-list li > div,
+.section-head > div {
+  min-width: 0;
+}
+
+.settings,
+.account .handle {
+  overflow-wrap: anywhere;
+}
+
+dialog {
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 850px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .layout > aside {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px clamp(12px, 3vw, 20px);
+  }
+
+  .layout > aside > .brand {
+    display: none;
+  }
+
+  .layout > aside > nav {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 136px), 1fr));
+    gap: 4px;
+  }
+
+  .layout > aside nav button {
+    min-height: 44px;
+    padding: 6px 8px;
+    font-size: .8125rem;
+    overflow-wrap: anywhere;
+  }
+
+  .layout > aside nav svg {
+    flex: none;
+  }
+
+  .layout > aside > .account-session {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .account-session .btn,
+  .week-actions > button,
+  .account-actions > .btn,
+  .actions > .btn {
+    min-height: 44px;
+  }
+
+  .section-head,
+  .week-head {
+    flex-wrap: wrap;
+  }
+
+  .account-list li {
+    flex-wrap: wrap;
+  }
+
+  .account-filters {
+    width: 100%;
+  }
+}
+
+@media (max-width: 490px) {
+  .profile-banner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 28%);
+  }
+
+  .banner-title {
+    white-space: normal;
+    line-height: 1.15;
+  }
+
+  .agency-title {
+    gap: 6px;
+  }
+
+  .banner-profile {
+    gap: 4px;
+    font-size: .75rem;
+  }
+
+  .day {
+    min-height: 48px;
+    padding-inline: 0;
+  }
+
+  .stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .stat {
+    overflow-wrap: anywhere;
+  }
+
+  .account-filters > *,
+  .settings [role="group"] > label {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+
+  .settings [role="group"] input,
+  .settings [role="group"] select,
+  dialog input,
+  dialog textarea,
+  dialog select {
+    min-width: 0;
+    font-size: 1rem;
+  }
+
+  dialog {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 340px) {
+  .banner-agent-name {
+    display: none;
+  }
+
+  .profile-banner {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stat {
+    display: flex;
+    gap: 8px;
+  }
+}
+
+.mobile-menu-toggle {
+  display: none;
+}
+
+@media (max-width: 850px) {
+  .profile-banner {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 25%);
+    gap: 8px;
+    padding-inline: 10px;
+  }
+
+  .mobile-menu-toggle {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: inherit;
+    background: #f7fbff;
+    border: 1px solid #c9dff4;
+    border-radius: 9px;
+  }
+
+  .profile-banner .banner-title {
+    grid-column: 2;
+    min-width: 0;
+    text-align: left;
+    white-space: normal;
+    line-height: 1.15;
+  }
+
+  .layout > aside[data-mobile-open="false"] {
+    display: none;
+  }
+
+  .layout > main {
+    grid-row: 3;
+  }
+}
+
+@media (max-width: 340px) {
+  .profile-banner {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+}
