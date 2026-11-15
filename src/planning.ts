@@ -116,10 +116,13 @@ export function shiftDate(date: Date, days: number) {
 }
 
 export const dailyScrapingGoal = 40
+export const firstScrapingGoalDay = '2026-11-16'
+export const scrapingTransitionDay = dateKey(shiftDate(fromKey(firstScrapingGoalDay), -1))
 
 type ScrapingEntry = TylanReference | SubmittedPost
 
 export function scrapingDay(entry: ScrapingEntry) {
+  if (entry.addedOn && entry.addedOn < firstScrapingGoalDay) return entry.addedOn
   return entry.quotaDay ?? entry.addedOn
 }
 
@@ -150,14 +153,15 @@ const scrapingHour = new Intl.DateTimeFormat('en-GB', {
 
 export function scrapingToday(now = new Date()) {
   const today = todayKey(now)
-  return Number(scrapingHour.format(now)) < 2
+  return today > firstScrapingGoalDay && Number(scrapingHour.format(now)) < 2
     ? dateKey(shiftDate(fromKey(today), -1))
     : today
 }
 
 export function nextScrapingDay(planning: Planning, agent: string, now = new Date()) {
-  const { counts } = scrapingProgress([...planning.references, ...(planning.submittedPosts ?? [])])
   let day = scrapingToday(now)
+  if (day < firstScrapingGoalDay) return day
+  const { counts } = scrapingProgress([...planning.references, ...(planning.submittedPosts ?? [])])
   while ((counts.get(scrapingBucket(agent, day)) ?? 0) >= dailyScrapingGoal) {
     day = dateKey(shiftDate(fromKey(day), 1))
   }

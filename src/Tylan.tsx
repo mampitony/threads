@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
 import { CaptionUseEditor } from './CaptionUseEditor'
-import { dailyScrapingGoal, scrapingDay, webUrl } from './planning'
+import { dailyScrapingGoal, scrapingDay, scrapingTransitionDay, webUrl } from './planning'
 import type { CaptionTarget, Planning, TylanReference, scrapingProgress } from './planning'
 
 const reactionFormat = new Intl.NumberFormat('fr-FR')
@@ -116,7 +116,11 @@ export function Tylan({ profileNames, today, progress, data, selectedDate, defau
     }
   }, [highlightedId])
   const { accounts, models, captionUses } = data
-  const references = day ? data.references.filter(reference => scrapingDay(reference) === day) : data.references
+  const references = data.references.filter(reference => {
+    const recordedDay = scrapingDay(reference)
+    return !day || recordedDay === day || (!recordedDay && day === scrapingTransitionDay)
+  })
+  const showUndated = day === scrapingTransitionDay && references.some(reference => !scrapingDay(reference))
   const accountNames = new Map(accounts.map(account => [account.id, account.name]))
   const modelNames = new Map(models.map(model => [model.id, model.name]))
   const usesByReference = new Map<string, string[]>()
@@ -142,6 +146,7 @@ export function Tylan({ profileNames, today, progress, data, selectedDate, defau
       </div>
       <ScrapingDayFilter today={today} day={day} onChange={setDayOverride} progress={progress}
         agents={profileNames} />
+      {showUndated && <p className="sub">Les anciennes publications sans date sont aussi affichées pour cette journée de transition.</p>}
       {references.length === 0 ? <p className="empty">Aucune publication de référence pour cette sélection.</p> :
         <ul className="reference-list">
           {references.map(reference => {
@@ -157,6 +162,7 @@ export function Tylan({ profileNames, today, progress, data, selectedDate, defau
                 <button className="btn" aria-label={'Modifier la publication de ' + reference.author}
                   onClick={() => { setHighlightedId(''); setEditor({ reference }) }}>Modifier</button>
               </div>
+              {!scrapingDay(reference) && <p className="sub">Date d’ajout inconnue</p>}
               {reference.caption && <p className="caption reference-caption">{reference.caption}</p>}
               <dl className="reference-meta">
                 <div><dt>Réactions</dt><dd>{reactionFormat.format(reference.reactions)}</dd></div>
