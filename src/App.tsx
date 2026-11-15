@@ -1043,7 +1043,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
             </div>
           </section>)}
         </div>
-      </> : page === 'submissions' ? <SubmittedPosts posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName}
+      </> : page === 'submissions' ? <SubmittedPosts posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName} storageKey={storageKey}
         onSave={saveSubmittedPost} onRemove={removeSubmittedPost} />
         : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
         : <Tylan data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}

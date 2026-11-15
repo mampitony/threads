@@ -3,6 +3,16 @@ import type { FormEvent } from 'react'
 import { Modal } from './Modal'
 import { formatDate, fromKey, todayKey } from './planning'
 import type { SubmittedPost } from './planning'
+import { publicationKey } from './threads'
+
+function readCopiedLinks(key: string): string[] {
+  try {
+    const links: unknown = JSON.parse(localStorage.getItem(key) ?? '[]')
+    return Array.isArray(links) ? links.filter(link => typeof link === 'string') : []
+  } catch {
+    return []
+  }
+}
 
 const reactionFormat = new Intl.NumberFormat('fr-FR')
 const addedTimeFormat = new Intl.DateTimeFormat('fr-FR', {
@@ -35,9 +45,10 @@ function groupPostsByAgent(posts: SubmittedPost[]) {
   return [...groups.entries()].sort(([, a], [, b]) => a.name.localeCompare(b.name, 'fr'))
 }
 
-export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
+export function SubmittedPosts({ posts, defaultAgentName, storageKey, onSave, onRemove }: {
   posts: SubmittedPost[]
   defaultAgentName: string
+  storageKey: string
   onSave: (post: Pick<SubmittedPost, 'url' | 'agent'>, previous?: SubmittedPost) => Promise<string | { message: string; duplicateUrl: string }>
   onRemove: (post: SubmittedPost) => Promise<string>
 }) {
@@ -54,6 +65,8 @@ export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
   const [error, setError] = useState('')
   const [removeError, setRemoveError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const copyStorageKey = storageKey + ':copied-submitted-posts'
+  const [copiedLinks, setCopiedLinks] = useState(() => new Set(readCopiedLinks(copyStorageKey)))
   const [duplicateUrl, setDuplicateUrl] = useState('')
   const [highlightedUrl, setHighlightedUrl] = useState('')
   const highlightedRow = useRef<HTMLLIElement>(null)
@@ -146,9 +159,17 @@ export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
     setFeedback('')
     try {
       await navigator.clipboard.writeText(url)
-      setFeedback('Lien copié. Tu peux le coller dans ton message au chef.')
     } catch {
       setFeedback('Copie le lien avec le menu du navigateur.')
+      return
+    }
+    const updated = new Set([...copiedLinks, ...readCopiedLinks(copyStorageKey), publicationKey(url)])
+    setCopiedLinks(updated)
+    try {
+      localStorage.setItem(copyStorageKey, JSON.stringify([...updated]))
+      setFeedback('Lien copié. Tu peux le coller dans ton message au chef.')
+    } catch {
+      setFeedback('Lien copié. L’indication est visible sur cette page.')
     }
   }
 
@@ -238,7 +259,12 @@ export function SubmittedPosts({ posts, defaultAgentName, onSave, onRemove }: {
               </p>
             </div>
             <div className="account-actions">
-              <button className="btn" type="button" onClick={() => void copy(post.url)}>Copier le lien</button>
+              {copiedLinks.has(publicationKey(post.url))
+                ? <button className="btn" type="button" onClick={() => void copy(post.url)}
+                    style={{ backgroundColor: '#dcfce7', color: '#14532d', borderColor: '#86b995' }}>
+                    ✓ Déjà copié · Recopier
+                  </button>
+                : <button className="btn" type="button" onClick={() => void copy(post.url)}>Copier le lien</button>}
               <button className="btn" type="button" aria-haspopup="dialog" disabled={busy} onClick={() => openForm(post)}>Modifier</button>
               <button className="btn danger" type="button" disabled={busy} onClick={() => void remove(post)}>
                 {removing === post.url ? 'Suppression…' : 'Supprimer'}
