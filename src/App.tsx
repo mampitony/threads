@@ -14,7 +14,7 @@ import { Tylan } from './Tylan'
 import { ModelEditor } from './Models'
 import {
   dateKey, emptyPost, exportCsv, formatDate, fromKey, loadPlanning, postKey, initialPlanning as emptyWorkspace,
-  isDateKey, readPlanning, shiftDate, slots, todayKey, webUrl,
+  isDateKey, nextScrapingDay, readPlanning, scrapingBucket, scrapingProgress, shiftDate, slots, todayKey, webUrl,
 } from './planning'
 import type { Account, CaptionTarget, Model, Planning, Post, Slot, SubmittedPost, TylanReference } from './planning'
 
@@ -415,7 +415,23 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const latestRevision = useRef(-1)
   const [syncError, setSyncError] = useState('')
   const [importing, setImporting] = useState(false)
-  const [selected, setSelected] = useState('2026-11-10')
+  const [today, setToday] = useState(todayKey)
+  const [chosenDay, setSelected] = useState<string>()
+  const selected = chosenDay ?? today
+
+  useEffect(() => {
+    const updateDay = () => setToday(todayKey())
+    const timerId = window.setInterval(updateDay, 15_000)
+    document.addEventListener('visibilitychange', updateDay)
+    return () => {
+      window.clearInterval(timerId)
+      document.removeEventListener('visibilitychange', updateDay)
+    }
+  }, [])
+
+  function selectDay(day: string) {
+    setSelected(day === todayKey() ? undefined : day)
+  }
   const [filter, setFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
   const [page, setPage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile'>('dashboard')
@@ -693,6 +709,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     const receivedDate = publicPost?.publishedOn
     const publishedOn = receivedDate && isDateKey(receivedDate) && receivedDate <= today
       ? receivedDate : samePost ? previous.publishedOn : undefined
+    let assignedDay: string | undefined
     let conflict: string | { message: string; duplicateUrl: string } = ''
     const result = await commit(current => {
       const submittedPosts = current.submittedPosts ?? []
@@ -709,8 +726,10 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         conflict = { message: 'Ce post est déjà enregistré par ' + duplicate.agent + '.', duplicateUrl: duplicate.url }
         return null
       }
+      assignedDay = previous && scrapingBucket(previous.agent, '') === scrapingBucket(agent, '')
+        ? previous.quotaDay : nextScrapingDay(current, agent, todayKey(addedAt))
       const updated = {
-        url: canonicalUrl, agent, reactions, publishedOn,
+        url: canonicalUrl, agent, reactions, publishedOn, quotaDay: assignedDay,
         addedOn: previous ? previous.addedOn : todayKey(addedAt),
         addedAt: previous ? previous.addedAt : addedAt.toISOString(),
       }
@@ -721,6 +740,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           : [updated, ...submittedPosts],
       }
     })
+    if (result === 'saved' && assignedDay && assignedDay !== previous?.quotaDay && assignedDay !== todayKey(addedAt)) {
+      notice('Lien comptabilisé le ' + formatDate(fromKey(assignedDay), { dateStyle: 'long' }) + '.')
+    }
     return result === 'saved' ? '' : conflict || 'Impossible d’enregistrer le lien. Réessaie.'
   }
 
@@ -762,6 +784,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     }
 
     const key = publicationKey(url)
+    let assignedDay: string | undefined
+    const addedAt = new Date()
+    const addedOn = todayKey(addedAt)
     let conflict: string | { message: string; referenceId: string } = 'Cette publication n’est plus disponible dans la liste.'
     const result = await commit(current => {
       if (id && !current.references.some(reference => reference.id === id)) return null
@@ -779,7 +804,14 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         return null
       }
 
-      const reference = { ...fields, url, id: id ?? crypto.randomUUID() }
+      const previous = current.references.find(reference => reference.id === id)
+      assignedDay = previous && scrapingBucket(previous.agent, '') === scrapingBucket(fields.agent, '')
+        ? previous.quotaDay : nextScrapingDay(current, fields.agent, addedOn)
+      const reference = { ...previous, ...fields, url, id: id ?? crypto.randomUUID(),
+        addedOn: previous ? previous.addedOn : addedOn,
+        addedAt: previous ? previous.addedAt : addedAt.toISOString(),
+        quotaDay: assignedDay,
+      }
       const existing = current.references.map(item => {
         if (item.id === id) return reference
         const canonicalUrl = resolved.get(item.url)
@@ -789,7 +821,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       return { ...current, references }
     })
     if (result === 'saved') {
-      notice('Publication de référence enregistrée.')
+      notice(!id && assignedDay && assignedDay !== addedOn
+        ? 'Publication comptabilisée le ' + formatDate(fromKey(assignedDay), { dateStyle: 'long' }) + '.'
+        : 'Publication de référence enregistrée.')
       return ''
     }
     return result === 'conflict' ? conflict : 'Impossible d’enregistrer cette publication.'
@@ -846,6 +880,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
 
   const modelIds = new Set(data.models.map(model => model.id))
   const activeModel = modelFilter === 'unassigned' || modelIds.has(modelFilter) ? modelFilter : ''
+  const scrapingAgents = [defaultAgentName, ...data.references.map(item => item.agent),
+    ...(data.submittedPosts ?? []).map(item => item.agent)].filter(Boolean)
+  const progress = scrapingProgress([...data.references, ...(data.submittedPosts ?? [])])
   const orderedAccounts = [...data.accounts].sort((a, b) =>
     a.name.localeCompare(b.name, 'fr', { numeric: true, sensitivity: 'base' }))
   const unassigned = orderedAccounts.filter(account => !account.modelId || !modelIds.has(account.modelId))
@@ -980,7 +1017,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         loadError={profileError} onSave={setAgentProfile} />
         {isAdmin && <AgencyLogoSettings onSave={setAgencyLogo} />}
       </> : page === 'planning' ? <>
-        <WeekPicker selected={selected} onSelect={setSelected} />
+        <WeekPicker selected={selected} onSelect={selectDay} />
         <div className="stats">
           <div className="stat"><b>{accounts.length}</b><span>Comptes affichés</span></div>
           <div className="stat"><b>{posts.length} / {accounts.length * slots.length}</b><span>Créneaux renseignés</span></div>
@@ -1020,7 +1057,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         </footer>
       </> : page === 'dashboard' ? <>
         <header className="top"><h1>Tableau de bord</h1></header>
-        <WeekPicker selected={selected} onSelect={setSelected} />
+        <WeekPicker selected={selected} onSelect={selectDay} />
         <Dashboard data={data} date={selected}
           onEdit={(account, slot) => setEditor({ type: 'post', account, slot, date: selected })}
           onSuggest={(key, caption, sourceId) => setEditor({ type: 'suggestion', key, caption, sourceId })} />
@@ -1045,10 +1082,10 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
             </div>
           </section>)}
         </div>
-      </> : page === 'submissions' ? <SubmittedPosts posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName} storageKey={storageKey}
+      </> : page === 'submissions' ? <SubmittedPosts profileNames={scrapingAgents} today={today} progress={progress} posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName} storageKey={storageKey}
         onSave={saveSubmittedPost} onRemove={removeSubmittedPost} />
         : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
-        : <Tylan data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
+        : <Tylan profileNames={scrapingAgents} today={today} progress={progress} data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>
     {openGroup && <Modal title={openGroup.name} onClose={() => setEditor(null)}>
       <div className="account-actions">

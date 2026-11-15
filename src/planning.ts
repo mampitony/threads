@@ -10,6 +10,9 @@ export type TylanReference = {
   url: string
   reactions: number
   agent: string
+  addedOn?: string
+  addedAt?: string
+  quotaDay?: string
 }
 export type CaptionUse = {
   referenceId: string
@@ -26,6 +29,7 @@ export type SubmittedPost = {
   addedOn?: string
   addedAt?: string
   publishedOn?: string
+  quotaDay?: string
 }
 
 export type Planning = {
@@ -109,6 +113,42 @@ export function shiftDate(date: Date, days: number) {
   const shifted = new Date(date)
   shifted.setUTCDate(shifted.getUTCDate() + days)
   return shifted
+}
+
+export const dailyScrapingGoal = 40
+
+type ScrapingEntry = TylanReference | SubmittedPost
+
+export function scrapingDay(entry: ScrapingEntry) {
+  return entry.quotaDay ?? entry.addedOn
+}
+
+export function scrapingProgress(entries: ScrapingEntry[]) {
+  const counts = new Map<string, number>()
+  const numbers = new Map<ScrapingEntry, number>()
+  const ordered = [...entries].reverse().sort((a, b) => (a.addedAt ?? '').localeCompare(b.addedAt ?? ''))
+  for (const entry of ordered) {
+    const day = scrapingDay(entry)
+    if (!day) continue
+    const key = scrapingBucket(entry.agent, day)
+    const number = (counts.get(key) ?? 0) + 1
+    counts.set(key, number)
+    numbers.set(entry, number)
+  }
+  return { counts, numbers }
+}
+
+export function scrapingBucket(agent: string, day: string) {
+  return day + '|' + agent.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr')
+}
+
+export function nextScrapingDay(planning: Planning, agent: string, today: string) {
+  const { counts } = scrapingProgress([...planning.references, ...(planning.submittedPosts ?? [])])
+  let day = today
+  while ((counts.get(scrapingBucket(agent, day)) ?? 0) >= dailyScrapingGoal) {
+    day = dateKey(shiftDate(fromKey(day), 1))
+  }
+  return day
 }
 
 export const postKey = (date: string, account: Account, slot: Slot) =>

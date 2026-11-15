@@ -8,6 +8,13 @@ const optionalDate = value => {
   const date = new Date(value + 'T12:00:00Z')
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
+const optionalTimestamp = value => {
+  if (value === undefined) return true
+  if (!text(value) || value.length !== 24) return false
+  const instant = new Date(value)
+  return Number.isFinite(instant.getTime()) && instant.toISOString() === value
+}
+
 const webLink = value => {
   try { return text(value) && ['http:', 'https:'].includes(new URL(value).protocol) }
   catch { return false }
@@ -19,12 +26,8 @@ function validSubmittedPosts(posts) {
   return posts.every(post => {
     if (!object(post) || !text(post.agent) || !post.agent.trim() || post.agent.length > 150
       || !webLink(post.url) || post.url.length > 2000 || !optionalCount(post.reactions)
-      || !optionalDate(post.addedOn) || !optionalDate(post.publishedOn)) return false
-    if (post.addedAt !== undefined) {
-      if (!text(post.addedAt) || post.addedAt.length !== 24) return false
-      const addedAt = new Date(post.addedAt)
-      if (!Number.isFinite(addedAt.getTime()) || addedAt.toISOString() !== post.addedAt) return false
-    }
+      || !optionalDate(post.addedOn) || !optionalDate(post.publishedOn)
+      || !optionalDate(post.quotaDay) || !optionalTimestamp(post.addedAt)) return false
     const url = new URL(post.url)
     const code = /^\/@[\w.]+\/post\/([\w-]+)\/?$/.exec(url.pathname)?.[1]
     if (url.protocol !== 'https:' || !/^(www\.)?threads\.(com|net)$/.test(url.hostname)
@@ -49,7 +52,8 @@ function validPlanning(data) {
         && new URL(item.imageUrl).protocol === 'https:')))
     && Array.isArray(data.references) && data.references.every(item =>
       object(item) && text(item.id) && text(item.caption) && text(item.author) && webLink(item.url)
-      && count(item.reactions) && text(item.agent))
+      && count(item.reactions) && text(item.agent) && optionalDate(item.addedOn)
+      && optionalDate(item.quotaDay) && optionalTimestamp(item.addedAt))
     && Array.isArray(data.captionUses) && data.captionUses.every(item =>
       object(item) && text(item.referenceId) && text(item.accountId) && text(item.modelId) && text(item.modelName))
 }

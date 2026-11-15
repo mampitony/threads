@@ -1,8 +1,9 @@
+import { ScrapingDayFilter } from './ScrapingDayFilter'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
-import { formatDate, fromKey, todayKey } from './planning'
-import type { SubmittedPost } from './planning'
+import { dailyScrapingGoal, formatDate, fromKey, scrapingDay } from './planning'
+import type { SubmittedPost, scrapingProgress } from './planning'
 import { publicationKey } from './threads'
 
 function readCopiedLinks(key: string): string[] {
@@ -45,7 +46,10 @@ function groupPostsByAgent(posts: SubmittedPost[]) {
   return [...groups.entries()].sort(([, a], [, b]) => a.name.localeCompare(b.name, 'fr'))
 }
 
-export function SubmittedPosts({ posts, defaultAgentName, storageKey, onSave, onRemove }: {
+export function SubmittedPosts({ today, progress, profileNames, posts, defaultAgentName, storageKey, onSave, onRemove }: {
+  today: string
+  progress: ReturnType<typeof scrapingProgress>
+  profileNames: string[]
   posts: SubmittedPost[]
   defaultAgentName: string
   storageKey: string
@@ -85,10 +89,12 @@ export function SubmittedPosts({ posts, defaultAgentName, storageKey, onSave, on
   }, [highlightedUrl])
   const lastAddingAgent = useRef('')
   const busy = saving || Boolean(removing)
-  const today = todayKey()
+  const [dayOverride, setDayOverride] = useState<string>()
+  const day = dayOverride ?? today
   const agents = groupPostsByAgent(posts)
   const selectedAgent = agents.find(([key]) => key === agentFilter)
-  const filtered = filterPosts(selectedAgent?.[1].posts ?? posts, today, addedOnFilter, maxAgeFilter, minReactionsFilter)
+  const dayPosts = (selectedAgent?.[1].posts ?? posts).filter(post => !day || scrapingDay(post) === day)
+  const filtered = filterPosts(dayPosts, today, addedOnFilter, maxAgeFilter, minReactionsFilter)
   const groups = groupPostsByAgent(filtered)
   const hasFilters = Boolean(selectedAgent || addedOnFilter || maxAgeFilter || minReactionsFilter)
 
@@ -196,6 +202,7 @@ export function SubmittedPosts({ posts, defaultAgentName, storageKey, onSave, on
               return
             }
             if (!filtered.some(post => post.url === target)) {
+              setDayOverride('')
               setAgentFilter('')
               setAddedOnFilter('')
               setMaxAgeFilter('')
@@ -213,6 +220,7 @@ export function SubmittedPosts({ posts, defaultAgentName, storageKey, onSave, on
     <p className="sub" role="status">{feedback}</p>
     <section className="settings" aria-labelledby="submitted-posts-title">
       <h2 id="submitted-posts-title">Liens enregistrés</h2>
+      <ScrapingDayFilter today={today} day={day} onChange={setDayOverride} progress={progress} agents={profileNames} />
       <div className="account-actions" role="group" aria-label="Filtrer les liens" style={{ alignItems: 'end', marginBlock: 12 }}>
         <label>Agent<select value={selectedAgent?.[0] ?? ''} onChange={event => setAgentFilter(event.target.value)}>
           <option value="">Tous les agents</option>
@@ -233,16 +241,19 @@ export function SubmittedPosts({ posts, defaultAgentName, storageKey, onSave, on
       </div>
       {hasFilters && <p className="sub" role="status">{filtered.length} / {posts.length} liens affichés</p>}
       {removeError && <p className="form-error" role="alert">{removeError}</p>}
-      {groups.length === 0 && <p className="sub">{hasFilters ? 'Aucun lien ne correspond aux filtres.' : 'Aucun lien enregistré.'}</p>}
+      {groups.length === 0 && <p className="sub">{hasFilters ? 'Aucun lien ne correspond aux filtres.' : 'Aucun lien pour cette sélection.'}</p>}
       {groups.map(([key, group]) => <section key={key} style={{ marginBlockStart: 16 }}>
         <h3 style={{ overflowWrap: 'anywhere' }}>{group.name} · {group.posts.length} {group.posts.length === 1 ? 'lien' : 'liens'}</h3>
         <ul className="account-list">
-          {group.posts.map(post => <li key={post.url} tabIndex={-1} ref={post.url === highlightedUrl ? highlightedRow : undefined}
+          {group.posts.map(post => {
+            const number = progress.numbers.get(post)
+            return <li key={post.url} tabIndex={-1} ref={post.url === highlightedUrl ? highlightedRow : undefined}
             style={{ flexWrap: 'wrap', backgroundColor: post.url === highlightedUrl ? '#fef3c7' : undefined,
               boxShadow: post.url === highlightedUrl ? 'inset 4px 0 #b45309' : undefined,
               paddingInlineStart: post.url === highlightedUrl ? 10 : undefined,
               transition: 'background-color 350ms ease' }}>
             <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+              {number && number <= dailyScrapingGoal && <strong>{number} / {dailyScrapingGoal} · </strong>}
               <a href={post.url} target="_blank" rel="noopener noreferrer">{post.url}</a>
               <p className="sub">{post.reactions === undefined ? 'Réactions non renseignées'
                 : reactionFormat.format(post.reactions) + (post.reactions > 1 ? ' réactions' : ' réaction')}</p>
@@ -270,7 +281,7 @@ export function SubmittedPosts({ posts, defaultAgentName, storageKey, onSave, on
                 {removing === post.url ? 'Suppression…' : 'Supprimer'}
               </button>
             </div>
-          </li>)}
+          </li>})}
         </ul>
       </section>)}
     </section>
