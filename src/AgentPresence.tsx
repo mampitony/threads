@@ -104,10 +104,50 @@ const lastSeenFormat = new Intl.DateTimeFormat('fr-FR', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Indian/Antananarivo',
 })
 
+function orderedAgents(presence?: Presence) {
+  return [...(presence?.agents ?? [])].sort((a, b) =>
+    Number(b.status === 'online') - Number(a.status === 'online') || a.name.localeCompare(b.name, 'fr'))
+}
+
+function AgentShortcut({ agent, onOpen }: { agent: Presence['agents'][number]; onOpen: () => void }) {
+  const [photo, setPhoto] = useState('')
+  useEffect(() => {
+    const controller = new AbortController()
+    const query = new URLSearchParams({ agent: agent.id, avatar: '1' })
+    fetch('/api/auth/profile?' + query, {
+      headers: { 'x-planning-auth': '1' },
+      signal: controller.signal,
+    }).then(async response => {
+      if (!response.ok) return
+      const result = await response.json()
+      if (!controller.signal.aborted && typeof result.photo === 'string') setPhoto(result.photo)
+    }).catch(() => {})
+    return () => controller.abort()
+  }, [agent.id])
+
+  const label = agent.name + (agent.status === 'online' ? ' · En ligne' : '')
+  return <button type="button" className="agent-shortcut" aria-haspopup="dialog"
+    aria-label={'Voir le profil de ' + label} title={label} onClick={onOpen}>
+    {photo ? <img src={photo} alt="" /> : <span aria-hidden="true">{Array.from(agent.name)[0]?.toLocaleUpperCase('fr')}</span>}
+    {agent.status === 'online' && <span className="agent-shortcut-online" aria-hidden="true" />}
+  </button>
+}
+
+export function AgentDock({ presence, onDirectory }: { presence?: Presence; onDirectory: () => void }) {
+  const [selected, setSelected] = useState<Presence['agents'][number]>()
+  return <>
+    <div className="agent-dock" role="group" aria-label="Raccourcis vers les agents">
+      {orderedAgents(presence).slice(0, 3).map(agent => <AgentShortcut key={agent.id} agent={agent}
+        onOpen={() => setSelected(agent)} />)}
+      <button type="button" className="btn agent-directory-button" onClick={onDirectory}>Tous les agents</button>
+    </div>
+    {selected && <AgentProfileCard key={selected.id} agent={selected} onClose={() => setSelected(undefined)} />}
+  </>
+}
+
 export function AgentPresence({ presence, error }: Pick<PresenceControls, 'presence' | 'error'>) {
   const [selected, setSelected] = useState<{ id: string; name: string }>()
-  const agents = [...(presence?.agents ?? [])].sort((a, b) =>
-    Number(b.status === 'online') - Number(a.status === 'online') || a.name.localeCompare(b.name, 'fr'))
+  const agents = orderedAgents(presence)
   return <>
     <header className="top"><h1>Statut des agents</h1></header>
     <section className="settings">

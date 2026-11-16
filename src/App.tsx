@@ -1,3 +1,4 @@
+import { AgentDock, AgentPresence, PresenceSettings, useAgentPresence } from './AgentPresence'
 import { AccountPerformance } from './AccountPerformance'
 import { AgencyLogoSettings, agencyLogoRequest } from './AgencyLogo'
 import { AgentProfile, profileRequest } from './AgentProfile'
@@ -458,7 +459,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   }
   const [filter, setFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
-  const [page, setActivePage] = useState<'planning' | 'dashboard' | 'performance' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile'>('dashboard')
+  const [page, setActivePage] = useState<'planning' | 'dashboard' | 'performance' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile' | 'presence'>('dashboard')
+  const agentPresence = useAgentPresence()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
 
@@ -1053,6 +1055,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         <button aria-current={page === 'accounts' ? 'page' : undefined} onClick={() => setPage('accounts')}><Icon name="people" />Comptes</button>
         <button aria-current={page === 'tylan' ? 'page' : undefined} onClick={() => setPage('tylan')}><Icon name="references" />Scrapping Tylan</button>
         <button aria-current={page === 'submissions' ? 'page' : undefined} onClick={() => setPage('submissions')}><Icon name="references" />Liens à transmettre</button>
+        <button aria-current={page === 'presence' ? 'page' : undefined}
+          onClick={() => setPage('presence')}><Icon name="people" />Statut des agents</button>
         {isAdmin && <button aria-current={page === 'approvals' ? 'page' : undefined}
           onClick={() => setPage('approvals')}><Icon name="people" />Gestion des accès</button>}
       </nav>
@@ -1074,6 +1078,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       </div>}
       {page === 'profile' ? <><AgentProfile email={email} savedProfile={agentProfile}
         loadError={profileError} onSave={setAgentProfile} />
+        <PresenceSettings {...agentPresence} />
+        <AgentDock presence={agentPresence.presence} onDirectory={() => setPage('presence')} />
         {isAdmin && <AgencyLogoSettings onSave={setAgencyLogo} />}
       </> : page === 'planning' ? <>
         <WeekPicker selected={selected} onSelect={selectDay} />
@@ -1120,7 +1126,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         <Dashboard data={data} date={selected}
           onEdit={(account, slot) => setEditor({ type: 'post', account, slot, date: selected })}
           onSuggest={(key, caption, sourceId) => setEditor({ type: 'suggestion', key, caption, sourceId })} />
-      </> : page === 'performance' ? <AccountPerformance data={data} /> : page === 'accounts' ? <>
+      </> : page === 'presence' ? <AgentPresence {...agentPresence} /> : page === 'performance' ? <AccountPerformance data={data} /> : page === 'accounts' ? <>
         <header className="top">
           <div><p className="eyebrow">Gestion des publications</p><h1>Comptes</h1>
             <p className="sub">Rattache plusieurs comptes à chaque modèle.</p></div>

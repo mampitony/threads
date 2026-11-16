@@ -223,6 +223,14 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
         const agentId = searchParams.get('agent')
         if (req.method === 'GET') {
           if (agentId !== null) {
+            if (searchParams.get('avatar') === '1') {
+              const agent = await db.get(`
+                SELECT p.photo FROM users u LEFT JOIN agent_profiles p ON p.user_id = u.id
+                WHERE u.id = ? AND u.access IN ('admin', 'approved')
+              `, agentId)
+              if (!agent) return json(res, 404, { error: 'Ce profil est indisponible.' })
+              return json(res, 200, { photo: agent.photo ?? '' })
+            }
             const profile = await db.get(`
               SELECT u.email, p.display_name AS name, p.photo, p.cover_photo AS cover
               FROM users u LEFT JOIN agent_profiles p ON p.user_id = u.id
