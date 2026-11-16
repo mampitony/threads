@@ -51,10 +51,23 @@ export function openSqliteAuth(databasePath) {
     )
   `)
 
+  if (!db.prepare('PRAGMA table_info(agent_profiles)').all().some(column => column.name === 'cover_photo')) {
+    db.exec("ALTER TABLE agent_profiles ADD COLUMN cover_photo TEXT NOT NULL DEFAULT ''")
+  }
+
   db.exec(`CREATE TABLE IF NOT EXISTS agency_branding (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   logo TEXT NOT NULL
 );`)
+
+  if (!db.prepare('PRAGMA table_info(sessions)').all().some(column => column.name === 'presence_seen_at')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN presence_seen_at INTEGER')
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS agent_presence (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    visible INTEGER NOT NULL CHECK (visible IN (0, 1)),
+    last_seen_at INTEGER
+  )`)
 
   const sqlite = {
     get: (sql, ...params) => db.prepare(sql).get(...params),

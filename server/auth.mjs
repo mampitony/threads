@@ -6,6 +6,8 @@ const derive = promisify(scrypt)
 const saltSize = 16
 const hashSize = 64
 const sessionSeconds = 8 * 60 * 60
+const presenceTimeout = 90_000
+const missingPresenceSchema = error => ['42P01', '42703'].includes(error?.code)
 const cookieName = 'planning_session'
 const authWindow = 15 * 60 * 1000
 const accessStates = ['admin', 'approved', 'pending', 'refused']
@@ -73,7 +75,7 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
   async function handle(req, res, next) {
     const requestPath = req.url ?? '/'
     if (!requestPath.startsWith('/')) return next()
-    const { pathname: path } = new URL('http://localhost' + requestPath)
+    const { pathname: path, searchParams } = new URL('http://localhost' + requestPath)
     if (!path.startsWith('/api/')) return next()
     const token = sessionToken(req)
     const hashedToken = token ? digest(token) : null
@@ -151,29 +153,115 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
       }
     }
 
+    if (path === '/api/auth/presence') {
+      if (!session) return json(res, 401, { error: 'Reconnecte-toi pour consulter les statuts.' })
+      if (!trustedRequest) return json(res, 403, { error: 'Requête non autorisée.' })
+      if (!['GET', 'POST', 'PUT'].includes(req.method)) return json(res, 405, { error: 'Méthode non autorisée.' })
+
+      try {
+        if (req.method !== 'GET') {
+          const setting = req.method === 'PUT' ? await readJson(req) : null
+          if (req.method === 'PUT' && typeof setting?.visible !== 'boolean') {
+            return json(res, 400, { error: 'Réglage de visibilité invalide.' })
+          }
+          const updated = await db.transaction(async transaction => {
+            const now = Date.now()
+            if (!await transaction.get(sessionQuery, hashedToken, now)) return false
+
+            if (setting) {
+              await transaction.run(`
+                INSERT INTO agent_presence (user_id, visible, last_seen_at) VALUES (?, ?, NULL)
+                ON CONFLICT (user_id) DO UPDATE SET visible = excluded.visible, last_seen_at = NULL
+              `, session.id, Number(setting.visible))
+              await transaction.run('UPDATE sessions SET presence_seen_at = NULL WHERE user_id = ?', session.id)
+            }
+
+            await transaction.run(`
+              UPDATE sessions SET presence_seen_at = ?
+              WHERE token_hash = ? AND EXISTS (
+                SELECT 1 FROM agent_presence WHERE user_id = ? AND visible = 1
+              )
+            `, now, hashedToken, session.id)
+            await transaction.run('UPDATE agent_presence SET last_seen_at = ? WHERE user_id = ? AND visible = 1',
+              now, session.id)
+            return true
+          })
+          if (!updated) return json(res, 401, { error: 'Reconnecte-toi pour consulter les statuts.' })
+        }
+
+        const now = Date.now()
+        const rows = await db.all(`
+          SELECT u.id, u.email, p.display_name AS name, a.visible, a.last_seen_at,
+            EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = u.id
+              AND s.expires_at > ? AND s.presence_seen_at > ?) AS online
+          FROM users u
+          LEFT JOIN agent_profiles p ON p.user_id = u.id
+          LEFT JOIN agent_presence a ON a.user_id = u.id
+          WHERE u.access IN ('admin', 'approved')
+        `, now, now - presenceTimeout)
+        return json(res, 200, {
+          visible: rows.some(row => row.id === session.id && row.visible === 1),
+          agents: rows.map(row => ({
+            id: row.id,
+            name: row.name?.trim() || row.email.split('@')[0],
+            status: row.visible !== 1 ? 'hidden' : row.online ? 'online' : 'offline',
+            lastSeenAt: row.visible === 1 && row.last_seen_at != null ? Number(row.last_seen_at) : null,
+          })),
+        })
+      } catch (error) {
+        if (missingPresenceSchema(error)) {
+          return json(res, 503, { error: 'Exécute server/schema-presence.sql dans Neon pour activer les statuts.' })
+        }
+        throw error
+      }
+    }
+
     if (path === '/api/auth/profile') {
       if (!session) return json(res, 401, { error: 'Reconnecte-toi pour accéder à ton profil.' })
       if (!trustedRequest) return json(res, 403, { error: 'Requête non autorisée.' })
       try {
+        const agentId = searchParams.get('agent')
         if (req.method === 'GET') {
+          if (agentId !== null) {
+            const profile = await db.get(`
+              SELECT u.email, p.display_name AS name, p.photo, p.cover_photo AS cover
+              FROM users u LEFT JOIN agent_profiles p ON p.user_id = u.id
+              WHERE u.id = ? AND u.access IN ('admin', 'approved')
+            `, agentId)
+            if (!profile) return json(res, 404, { error: 'Ce profil est indisponible.' })
+            return json(res, 200, {
+              name: profile.name?.trim() || profile.email.split('@')[0],
+              photo: profile.photo ?? '', cover: profile.cover ?? '',
+            })
+          }
           const profile = await db.get(
-            'SELECT display_name AS name, photo FROM agent_profiles WHERE user_id = ?', session.id)
-          return json(res, 200, profile ?? { name: '', photo: '' })
+            'SELECT display_name AS name, photo, cover_photo AS cover FROM agent_profiles WHERE user_id = ?', session.id)
+          return json(res, 200, profile ?? { name: '', photo: '', cover: '' })
         }
-        if (req.method !== 'PUT') return json(res, 405, { error: 'Méthode non autorisée.' })
-        const body = await readJson(req, 210_000)
+        if (req.method !== 'PUT' || agentId !== null) {
+          return json(res, 405, { error: 'Méthode non autorisée.' })
+        }
+        const body = await readJson(req, 660_000)
         const name = typeof body?.name === 'string' ? body.name.trim() : ''
         const photo = body?.photo
-        if (!name || name.length > 100 || typeof photo !== 'string' || photo.length > 200_000
-          || (photo && !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(photo))) {
-          return json(res, 400, { error: 'Nom ou photo de profil invalide.' })
+        const cover = body?.cover
+        const validPhoto = (value, limit) => typeof value === 'string' && value.length <= limit
+          && (!value || /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value))
+        if (!name || name.length > 100 || !validPhoto(photo, 200_000)
+          || (cover !== undefined && !validPhoto(cover, 450_000))) {
+          return json(res, 400, { error: 'Nom ou image de profil invalide.' })
         }
-        await db.run(
-          `INSERT INTO agent_profiles (user_id, display_name, photo) VALUES (?, ?, ?)
-           ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name, photo = excluded.photo`,
-          session.id, name, photo)
-        return json(res, 200, { name, photo })
+        const saved = await db.get(
+          `INSERT INTO agent_profiles (user_id, display_name, photo, cover_photo) VALUES (?, ?, ?, COALESCE(?, ''))
+           ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name, photo = excluded.photo,
+             cover_photo = COALESCE(?, agent_profiles.cover_photo)
+           RETURNING display_name AS name, photo, cover_photo AS cover`,
+          session.id, name, photo, cover ?? null, cover ?? null)
+        return json(res, 200, saved)
       } catch (error) {
+        if (error?.code === '42703') {
+          return json(res, 503, { error: 'Exécute server/schema-profile-cover.sql dans Neon pour activer les couvertures.' })
+        }
         if (error?.code === '42P01') {
           return json(res, 503, { error: 'Exécute server/schema-profiles.sql dans Neon pour activer les profils.' })
         }
@@ -221,7 +309,22 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
     }
     if (!trustedRequest) return json(res, 403, { error: 'Requête non autorisée.' })
     if (path === '/api/auth/logout') {
-      if (hashedToken) await db.run('DELETE FROM sessions WHERE token_hash = ?', hashedToken)
+      if (hashedToken) {
+        try {
+          await db.transaction(async transaction => {
+            const removed = await transaction.get(
+              'DELETE FROM sessions WHERE token_hash = ? RETURNING user_id, presence_seen_at', hashedToken)
+            const now = Date.now()
+            if (removed?.presence_seen_at > now - presenceTimeout) {
+              await transaction.run('UPDATE agent_presence SET last_seen_at = ? WHERE user_id = ? AND visible = 1',
+                now, removed.user_id)
+            }
+          })
+        } catch (error) {
+          if (!missingPresenceSchema(error)) throw error
+          await db.run('DELETE FROM sessions WHERE token_hash = ?', hashedToken)
+        }
+      }
       res.setHeader('Set-Cookie', cookie(req, '', 0, secureOnly))
       return json(res, 200, { user: null })
     }
