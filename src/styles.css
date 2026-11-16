@@ -1173,8 +1173,32 @@ dialog {
   background: #22874f;
 }
 
-dialog:has(.agent-profile-card) {
-  width: min(680px, calc(100% - 32px));
+.agent-cover-placeholder {
+  height: clamp(110px, 22vw, 230px);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #bdd8eb, #e8f1f7 68%, #e5efe9);
+}
+
+.agent-profile-identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-block-start: 16px;
+}
+
+.agent-profile-identity .agent-avatar {
+  width: clamp(72px, 11vw, 132px);
+  height: clamp(72px, 11vw, 132px);
+  flex: none;
+}
+
+.agent-profile-identity h1 {
+  flex: 1;
+  min-width: min(120px, 100%);
+  margin: 0;
+  font-size: clamp(23px, 4vw, 38px);
+  overflow-wrap: anywhere;
 }
 
 .agent-profile-images {

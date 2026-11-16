@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { AgentProfileCard } from './AgentProfile'
 
 type Presence = {
   visible: boolean
@@ -131,27 +130,30 @@ function AgentShortcut({ agent, onOpen }: { agent: Presence['agents'][number]; o
   }, [agent.id])
 
   const label = agent.name + (agent.status === 'online' ? ' · En ligne' : '')
-  return <button type="button" className="agent-shortcut" aria-haspopup="dialog"
+  return <button type="button" className="agent-shortcut"
     aria-label={'Voir le profil de ' + label} title={label} onClick={onOpen}>
     {photo ? <img src={photo} alt="" /> : <span aria-hidden="true">{Array.from(agent.name)[0]?.toLocaleUpperCase('fr')}</span>}
     {agent.status === 'online' && <span className="agent-shortcut-online" aria-hidden="true" />}
   </button>
 }
 
-export function AgentDock({ presence, onDirectory }: { presence?: Presence; onDirectory: () => void }) {
-  const [selected, setSelected] = useState<Presence['agents'][number]>()
-  return <>
-    <div className="agent-dock" role="group" aria-label="Raccourcis vers les agents">
-      {orderedAgents(presence).slice(0, 3).map(agent => <AgentShortcut key={agent.id} agent={agent}
-        onOpen={() => setSelected(agent)} />)}
-      <button type="button" className="btn agent-directory-button" onClick={onDirectory}>Tous les agents</button>
-    </div>
-    {selected && <AgentProfileCard key={selected.id} agent={selected} onClose={() => setSelected(undefined)} />}
-  </>
+type OpenAgent = (agent: { id: string; name: string }) => void
+
+export function AgentDock({ presence, onDirectory, onOpenAgent }: {
+  presence?: Presence
+  onDirectory: () => void
+  onOpenAgent: OpenAgent
+}) {
+  return <div className="agent-dock" role="group" aria-label="Raccourcis vers les agents">
+    {orderedAgents(presence).slice(0, 3).map(agent => <AgentShortcut key={agent.id} agent={agent}
+      onOpen={() => onOpenAgent(agent)} />)}
+    <button type="button" className="btn agent-directory-button" onClick={onDirectory}>Tous les agents</button>
+  </div>
 }
 
-export function AgentPresence({ presence, error }: Pick<PresenceControls, 'presence' | 'error'>) {
-  const [selected, setSelected] = useState<{ id: string; name: string }>()
+export function AgentPresence({ presence, error, onOpenAgent }: Pick<PresenceControls, 'presence' | 'error'> & {
+  onOpenAgent: OpenAgent
+}) {
   const agents = orderedAgents(presence)
   return <>
     <header className="top"><h1>Statut des agents</h1></header>
@@ -160,8 +162,8 @@ export function AgentPresence({ presence, error }: Pick<PresenceControls, 'prese
         : !presence ? <p role="status">Chargement des statuts…</p>
         : <ul className="account-list">
           {agents.map(agent => <li key={agent.id}>
-            <button className="btn" aria-haspopup="dialog" aria-label={'Voir le profil de ' + agent.name}
-              onClick={() => setSelected(agent)}>{agent.name}</button>
+            <button className="btn" aria-label={'Voir le profil de ' + agent.name}
+              onClick={() => onOpenAgent(agent)}>{agent.name}</button>
             <div>
               <span className="presence-status" data-status={agent.status}>
                 {agent.status === 'online' ? 'En ligne' : agent.status === 'offline' ? 'Hors ligne' : 'Statut masqué'}
@@ -173,6 +175,5 @@ export function AgentPresence({ presence, error }: Pick<PresenceControls, 'prese
           </li>)}
         </ul>}
     </section>
-    {selected && <AgentProfileCard key={selected.id} agent={selected} onClose={() => setSelected(undefined)} />}
   </>
 }

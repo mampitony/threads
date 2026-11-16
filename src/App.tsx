@@ -1,7 +1,7 @@
 import { AgentDock, AgentPresence, PresenceSettings, useAgentPresence } from './AgentPresence'
 import { AccountPerformance } from './AccountPerformance'
 import { AgencyLogoSettings, agencyLogoRequest } from './AgencyLogo'
-import { AgentProfile, profileRequest } from './AgentProfile'
+import { AgentProfile, AgentProfilePage, profileRequest } from './AgentProfile'
 import type { Profile } from './AgentProfile'
 import { ImportThreadsButton } from './ImportThreadsButton'
 import { sharedPlanningRequest } from './sharedPlanning'
@@ -461,10 +461,12 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const [modelFilter, setModelFilter] = useState('')
   const [page, setActivePage] = useState<'planning' | 'dashboard' | 'performance' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile' | 'presence'>('dashboard')
   const agentPresence = useAgentPresence()
+  const [viewedAgent, setViewedAgent] = useState<{ id: string; name: string }>()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
 
   function setPage(nextPage: typeof page) {
+    setViewedAgent(undefined)
     setActivePage(nextPage)
     setMenuOpen(false)
     if (menuOpen) menuButton.current?.focus()
@@ -1076,7 +1078,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           if (window.confirm('Rendre ce planning accessible à tous les comptes approuvés ?')) void importPreviousPlanning()
         }}>Importer mon ancien planning</button>
       </div>}
-      {page === 'profile' ? <><AgentProfile email={email} savedProfile={agentProfile}
+      {viewedAgent ? <AgentProfilePage key={viewedAgent.id} agent={viewedAgent}
+        onBack={() => setViewedAgent(undefined)} /> : page === 'profile' ? <><AgentProfile email={email} savedProfile={agentProfile}
         loadError={profileError} onSave={setAgentProfile} />
         <PresenceSettings {...agentPresence} />
         {isAdmin && <AgencyLogoSettings onSave={setAgencyLogo} />}
@@ -1125,7 +1128,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         <Dashboard data={data} date={selected}
           onEdit={(account, slot) => setEditor({ type: 'post', account, slot, date: selected })}
           onSuggest={(key, caption, sourceId) => setEditor({ type: 'suggestion', key, caption, sourceId })} />
-      </> : page === 'presence' ? <AgentPresence {...agentPresence} /> : page === 'performance' ? <AccountPerformance data={data} /> : page === 'accounts' ? <>
+      </> : page === 'presence' ? <AgentPresence {...agentPresence} onOpenAgent={setViewedAgent} /> : page === 'performance' ? <AccountPerformance data={data} /> : page === 'accounts' ? <>
         <header className="top">
           <div><p className="eyebrow">Gestion des publications</p><h1>Comptes</h1>
             <p className="sub">Rattache plusieurs comptes à chaque modèle.</p></div>
@@ -1151,7 +1154,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
         : <Tylan data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>
-    <AgentDock presence={agentPresence.presence} onDirectory={() => setPage('presence')} />
+    <AgentDock presence={agentPresence.presence} onDirectory={() => setPage('presence')} onOpenAgent={setViewedAgent} />
     {openGroup && <Modal title={openGroup.name} onClose={() => setEditor(null)}>
       <div className="account-actions">
         <button className="btn" onClick={() => setEditor({ type: 'account', modelId: openGroup.id ?? undefined })}>Ajouter un compte</button>

@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-
-import { Modal } from './Modal'
 
 export type Profile = { name: string; photo: string; cover: string }
 
@@ -40,16 +38,23 @@ export async function resizePhoto(file: File, maxSize = 320) {
 function ProfileImages({ profile }: { profile: Profile }) {
   return <div className="agent-profile-images">
     {profile.cover && <img className="agent-cover" src={profile.cover} alt="Photo de couverture" />}
-    {profile.photo
-      ? <img className="agent-avatar" src={profile.photo} alt="Photo de profil" />
-      : <span className="agent-avatar" aria-hidden="true">{Array.from(profile.name)[0]?.toLocaleUpperCase('fr')}</span>}
+    <ProfileAvatar profile={profile} />
   </div>
 }
 
-export function AgentProfileCard({ agent, onClose }: { agent: { id: string; name: string }; onClose: () => void }) {
+function ProfileAvatar({ profile }: { profile: Pick<Profile, 'photo' | 'name'> }) {
+  return profile.photo
+    ? <img className="agent-avatar" src={profile.photo} alt="Photo de profil" />
+    : <span className="agent-avatar" aria-hidden="true">{Array.from(profile.name)[0]?.toLocaleUpperCase('fr')}</span>
+}
+
+export function AgentProfilePage({ agent, onBack }: { agent: { id: string; name: string }; onBack: () => void }) {
   const [profile, setProfile] = useState<Profile>()
   const [error, setError] = useState('')
+  const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => {
+    window.scrollTo(0, 0)
+    heading.current?.focus({ preventScroll: true })
     const controller = new AbortController()
     profileRequest(undefined, controller.signal, agent.id).then(result => {
       if (!controller.signal.aborted) setProfile(result)
@@ -59,14 +64,19 @@ export function AgentProfileCard({ agent, onClose }: { agent: { id: string; name
     return () => controller.abort()
   }, [agent.id])
 
-  return <Modal title={profile?.name || agent.name} onClose={onClose}>
-    <div className="agent-profile-card">
-      {profile ? <ProfileImages profile={profile} /> : error
-        ? <p className="form-error" role="alert">{error}</p>
-        : <p role="status">Chargement du profil…</p>}
-      <div className="actions"><button className="btn" onClick={onClose}>Fermer</button></div>
+  const name = profile?.name || agent.name
+  return <section className="agent-profile-page settings" aria-labelledby="agent-profile-name">
+    {profile?.cover
+      ? <img className="agent-cover" src={profile.cover} alt="Photo de couverture" />
+      : <div className="agent-cover-placeholder" aria-hidden="true" />}
+    <div className="agent-profile-identity">
+      <ProfileAvatar profile={{ name, photo: profile?.photo ?? '' }} />
+      <h1 ref={heading} tabIndex={-1} id="agent-profile-name">{name}</h1>
+      <button type="button" className="btn" onClick={onBack}>Retour</button>
     </div>
-  </Modal>
+    {error && <p className="form-error" role="alert">{error}</p>}
+    {!profile && !error && <p className="sub" role="status">Chargement du profil…</p>}
+  </section>
 }
 
 export function AgentProfile({ email, savedProfile, loadError, onSave }: {
