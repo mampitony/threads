@@ -17,7 +17,7 @@ export async function profileRequest(profile?: Profile, signal?: AbortSignal, ag
   return result
 }
 
-export async function resizePhoto(file: File, maxSize = 320) {
+export async function resizePhoto(file: File, maxSize = 320, jpegQuality = 0.8) {
   const bitmap = await createImageBitmap(file)
   try {
     const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height))
@@ -28,8 +28,9 @@ export async function resizePhoto(file: File, maxSize = 320) {
     if (!context) throw new Error('Impossible de préparer la photo.')
     context.fillStyle = '#fff'
     context.fillRect(0, 0, canvas.width, canvas.height)
+    context.imageSmoothingQuality = 'high'
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-    return canvas.toDataURL('image/jpeg', 0.8)
+    return canvas.toDataURL('image/jpeg', jpegQuality)
   } finally {
     bitmap.close()
   }
@@ -103,8 +104,12 @@ export function AgentProfile({ email, savedProfile, loadError, onSave }: {
     }
     setBusy(true)
     try {
-      const photo = await resizePhoto(file, field === 'cover' ? 1200 : 320)
-      if (photo.length > (field === 'cover' ? 450_000 : 200_000)) {
+      const isCover = field === 'cover'
+      const limit = isCover ? 1_500_000 : 200_000
+      let photo = isCover ? await resizePhoto(file, 2400, 0.92) : await resizePhoto(file)
+      if (isCover && photo.length > limit) photo = await resizePhoto(file, 2000, 0.85)
+      if (isCover && photo.length > limit) photo = await resizePhoto(file, 1600, 0.8)
+      if (photo.length > limit) {
         setError('L’image préparée reste trop volumineuse. Choisis une autre image.')
         return
       }
