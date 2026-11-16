@@ -397,7 +397,32 @@ type Editor = { type: 'post'; account: Account; slot: Slot; date: string }
   | { type: 'account'; account?: Account; modelId?: string }
   | { type: 'model'; model?: Model }
   | { type: 'group'; modelId: string | null }
+  | { type: 'deleteAccount'; account: Account; groupId: string | null }
+  | { type: 'deleteModel'; model: Model }
   | { type: 'suggestion'; key: string; caption: string; sourceId: string }
+
+function DeletePlanningItem({ name, details, onClose, onDelete }: {
+  name: string
+  details: string
+  onClose: () => void
+  onDelete: () => Promise<string>
+}) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  return <Modal title={'Supprimer ' + name + ' ?'} onClose={() => { if (!saving) onClose() }}>
+    <p>{details}</p>
+    {error && <p className="form-error" role="alert">{error}</p>}
+    <div className="actions">
+      <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
+      <button className="btn danger" type="button" disabled={saving} onClick={async () => {
+        setSaving(true)
+        setError(await onDelete())
+        setSaving(false)
+      }}>{saving ? 'Suppression…' : 'Confirmer la suppression'}</button>
+    </div>
+  </Modal>
+}
 
 export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   storageKey: string
@@ -600,6 +625,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     }
     const filled = Boolean(post.count || post.caption || post.url || post.owner || post.imageUrl || post.author || post.likes != null || post.comments != null)
     const result = await commit(current => {
+      if (!current.accounts.some(account => account.id === target.account.id)) return null
       const posts = { ...current.posts }
       if (filled) posts[key] = post
       else delete posts[key]
@@ -642,6 +668,10 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   async function saveAccount(previous: Account | undefined, name: string, handle: string, modelId: string) {
     let conflict = 'Cet identifiant est déjà utilisé.'
     const result = await commit(current => {
+      if (previous && !current.accounts.some(account => account.id === previous.id)) {
+        conflict = 'Ce compte a déjà été supprimé.'
+        return null
+      }
       const duplicate = current.accounts.some(account =>
         account.id !== previous?.id && account.handle.toLowerCase() === handle.toLowerCase())
       if (duplicate) return null
@@ -682,17 +712,30 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     return result === 'conflict' ? 'Le nom est déjà utilisé ou le modèle a été supprimé.' : ''
   }
 
+  async function removeAccount(account: Account, groupId: string | null) {
+    const result = await commit(current => ({
+      ...current,
+      accounts: current.accounts.filter(item => item.id !== account.id),
+      posts: Object.fromEntries(Object.entries(current.posts).filter(([key]) => key.split('|')[1] !== account.id)),
+      captionUses: current.captionUses.filter(use => use.accountId !== account.id),
+    }))
+    if (result !== 'saved') return 'Impossible de supprimer ce compte du planning. Réessaie.'
+    setEditor({ type: 'group', modelId: groupId })
+    notice('Compte supprimé.')
+    return ''
+  }
+
   async function removeModel(model: Model) {
-    const result = await commit(current => {
-      if (current.accounts.some(account => account.modelId === model.id)) return null
-      return { ...current, models: current.models.filter(item => item.id !== model.id) }
-    })
-    if (result === 'saved') {
-      setEditor(null)
-      notice('Modèle supprimé.')
-    }
-    if (result === 'error') return 'Impossible de supprimer ce modèle dans le planning.'
-    return result === 'conflict' ? 'Rattache d’abord les comptes de ce modèle à un autre groupe.' : ''
+    const result = await commit(current => ({
+      ...current,
+      models: current.models.filter(item => item.id !== model.id),
+      accounts: current.accounts.map(account =>
+        account.modelId === model.id ? { ...account, modelId: undefined } : account),
+    }))
+    if (result !== 'saved') return 'Impossible de supprimer ce modèle du planning. Réessaie.'
+    setEditor(null)
+    notice('Modèle supprimé.')
+    return ''
   }
 
   async function saveSubmittedPost({ url, agent }: Pick<SubmittedPost, 'url' | 'agent'>, previous?: SubmittedPost) {
@@ -1110,12 +1153,20 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           const model = data.models.find(item => item.id === openGroup.id)
           if (model) setEditor({ type: 'model', model })
         }}>Modifier le modèle</button>}
+        {openGroup.id && <button className="btn danger" onClick={() => {
+          const model = data.models.find(item => item.id === openGroup.id)
+          if (model) setEditor({ type: 'deleteModel', model })
+        }}>Supprimer le modèle</button>}
       </div>
       {openGroup.accounts.length ? <ul className="account-list">
         {openGroup.accounts.map(account => <li key={account.id}>
           <div><strong>{account.name}</strong><p className="handle">@{account.handle}</p></div>
-          <button className="btn" aria-label={'Modifier le compte ' + account.name}
-            onClick={() => setEditor({ type: 'account', account })}>Modifier</button>
+          <div className="account-actions">
+            <button className="btn" aria-label={'Modifier le compte ' + account.name}
+              onClick={() => setEditor({ type: 'account', account })}>Modifier</button>
+            <button className="btn danger" aria-label={'Supprimer le compte ' + account.name}
+              onClick={() => setEditor({ type: 'deleteAccount', account, groupId: openGroup.id })}>Supprimer</button>
+          </div>
         </li>)}
       </ul> : <p className="sub">Aucun compte dans ce groupe.</p>}
       <div className="actions" style={{ marginBlockStart: 16 }}>
@@ -1131,9 +1182,16 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     {editor?.type === 'account' && <AccountEditor account={editor.account} models={data.models} modelId={editor.modelId}
       onClose={() => setEditor(null)} onSave={(name, handle, modelId) => saveAccount(editor.account, name, handle, modelId)} />}
     {editor?.type === 'model' && <ModelEditor model={editor.model}
-      onClose={() => setEditor(null)} onSave={name => saveModel(name, editor.model)}
-      onRemove={editor.model && !data.accounts.some(account => account.modelId === editor.model?.id)
-        ? () => removeModel(editor.model!) : undefined} />}
+      onClose={() => setEditor(null)} onSave={name => saveModel(name, editor.model)} />}
+    {editor?.type === 'deleteAccount' && <DeletePlanningItem key={editor.account.id}
+      name={editor.account.name + ' (@' + editor.account.handle + ')'}
+      details="Le compte, ses créneaux, ses statistiques et ses utilisations de légendes seront retirés du planning."
+      onClose={() => setEditor({ type: 'group', modelId: editor.groupId })}
+      onDelete={() => removeAccount(editor.account, editor.groupId)} />}
+    {editor?.type === 'deleteModel' && <DeletePlanningItem key={editor.model.id} name={editor.model.name}
+      details="Les comptes rattachés passeront dans « Sans modèle » avec leurs publications et statistiques."
+      onClose={() => setEditor({ type: 'group', modelId: editor.model.id })}
+      onDelete={() => removeModel(editor.model)} />}
     <div className="toast" role="status" hidden={!message}>{message}</div>
   </div>
 }

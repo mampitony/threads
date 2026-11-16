@@ -3,11 +3,10 @@ import type { FormEvent } from 'react'
 import { Modal } from './Modal'
 import type { Account, Model } from './planning'
 
-export function ModelEditor({ model, onClose, onSave, onRemove }: {
+export function ModelEditor({ model, onClose, onSave }: {
   model?: Model
   onClose: () => void
   onSave: (name: string) => Promise<string>
-  onRemove?: () => Promise<string>
 }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -26,12 +25,6 @@ export function ModelEditor({ model, onClose, onSave, onRemove }: {
       <label>Nom du modèle<input name="name" required maxLength={60} defaultValue={model?.name} /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="actions">
-        {onRemove && <button className="btn danger" type="button" disabled={saving} onClick={async () => {
-          if (!window.confirm('Supprimer ce modèle vide ?')) return
-          setSaving(true)
-          setError(await onRemove())
-          setSaving(false)
-        }}>Supprimer</button>}
         <button className="btn" type="button" disabled={saving} onClick={onClose}>Annuler</button>
         <button className="btn primary" type="submit" disabled={saving}>Enregistrer</button>
       </div>
