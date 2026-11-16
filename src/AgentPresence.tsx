@@ -151,16 +151,16 @@ export function AgentDock({ presence, onDirectory, onOpenAgent }: {
   </div>
 }
 
-export function AgentPresence({ presence, error, onOpenAgent }: Pick<PresenceControls, 'presence' | 'error'> & {
+export function AgentPresence({ onOpenAgent, ...controls }: PresenceControls & {
   onOpenAgent: OpenAgent
 }) {
+  const { presence, error } = controls
   const agents = orderedAgents(presence)
   return <>
     <header className="top"><h1>Statut des agents</h1></header>
-    <section className="settings">
-      {error ? <p className="form-error" role="alert">{error}</p>
-        : !presence ? <p role="status">Chargement des statuts…</p>
-        : <ul className="account-list">
+    <PresenceSettings {...controls} />
+    <section className="settings" aria-label="Liste des agents" style={{ marginBlockStart: 12 }}>
+      {presence ? <ul className="account-list">
           {agents.map(agent => <li key={agent.id}>
             <button className="btn" aria-label={'Voir le profil de ' + agent.name}
               onClick={() => onOpenAgent(agent)}>{agent.name}</button>
@@ -173,7 +173,7 @@ export function AgentPresence({ presence, error, onOpenAgent }: Pick<PresenceCon
               </p>}
             </div>
           </li>)}
-        </ul>}
+        </ul> : !error && <p role="status">Chargement des statuts…</p>}
     </section>
   </>
 }
