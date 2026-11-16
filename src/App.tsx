@@ -1,3 +1,4 @@
+import { AccountPerformance } from './AccountPerformance'
 import { AgencyLogoSettings, agencyLogoRequest } from './AgencyLogo'
 import { AgentProfile, profileRequest } from './AgentProfile'
 import type { Profile } from './AgentProfile'
@@ -436,7 +437,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   }
   const [filter, setFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
-  const [page, setActivePage] = useState<'planning' | 'dashboard' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile'>('dashboard')
+  const [page, setActivePage] = useState<'planning' | 'dashboard' | 'performance' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile'>('dashboard')
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
 
@@ -1008,6 +1009,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       <nav aria-label="Navigation principale">
         <span className="nav-label">Espace de travail</span>
         <button aria-current={page === 'dashboard' ? 'page' : undefined} onClick={() => setPage('dashboard')}><Icon name="stats" />Tableau de bord</button>
+        <button aria-current={page === 'performance' ? 'page' : undefined} onClick={() => setPage('performance')}><Icon name="stats" />Performance des comptes</button>
         <button aria-current={page === 'planning' ? 'page' : undefined} onClick={() => setPage('planning')}><Icon name="calendar" />Planning</button>
         <button aria-current={page === 'accounts' ? 'page' : undefined} onClick={() => setPage('accounts')}><Icon name="people" />Comptes</button>
         <button aria-current={page === 'tylan' ? 'page' : undefined} onClick={() => setPage('tylan')}><Icon name="references" />Scrapping Tylan</button>
@@ -1079,7 +1081,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         <Dashboard data={data} date={selected}
           onEdit={(account, slot) => setEditor({ type: 'post', account, slot, date: selected })}
           onSuggest={(key, caption, sourceId) => setEditor({ type: 'suggestion', key, caption, sourceId })} />
-      </> : page === 'accounts' ? <>
+      </> : page === 'performance' ? <AccountPerformance data={data} /> : page === 'accounts' ? <>
         <header className="top">
           <div><p className="eyebrow">Gestion des publications</p><h1>Comptes</h1>
             <p className="sub">Rattache plusieurs comptes à chaque modèle.</p></div>
