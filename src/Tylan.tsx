@@ -1,11 +1,10 @@
-import { ScrapingDayFilter } from './ScrapingDayFilter'
 import { ImportThreadsButton } from './ImportThreadsButton'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
 import { CaptionUseEditor } from './CaptionUseEditor'
-import { dailyScrapingGoal, scrapingDay, scrapingTransitionDay, webUrl } from './planning'
-import type { CaptionTarget, Planning, TylanReference, scrapingProgress } from './planning'
+import { webUrl } from './planning'
+import type { CaptionTarget, Planning, TylanReference } from './planning'
 
 const reactionFormat = new Intl.NumberFormat('fr-FR')
 type SaveReference = (
@@ -86,10 +85,7 @@ function ReferenceEditor({ reference, defaultAgentName, onClose, onSave, onLocat
   </Modal>
 }
 
-export function Tylan({ profileNames, today, progress, data, selectedDate, defaultAgentName, onSave, onDelete, onUse }: {
-  profileNames: string[]
-  today: string
-  progress: ReturnType<typeof scrapingProgress>
+export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, onUse }: {
   data: Planning
   selectedDate: string
   defaultAgentName: string
@@ -99,8 +95,6 @@ export function Tylan({ profileNames, today, progress, data, selectedDate, defau
 }) {
   const [editor, setEditor] = useState<{ reference?: TylanReference } | null>(null)
   const [selected, setSelected] = useState<TylanReference | null>(null)
-  const [dayOverride, setDayOverride] = useState<string>()
-  const day = dayOverride ?? today
   const [highlightedId, setHighlightedId] = useState('')
   const highlightedCard = useRef<HTMLLIElement>(null)
   useEffect(() => {
@@ -115,12 +109,7 @@ export function Tylan({ profileNames, today, progress, data, selectedDate, defau
       window.clearTimeout(timer)
     }
   }, [highlightedId])
-  const { accounts, models, captionUses } = data
-  const references = data.references.filter(reference => {
-    const recordedDay = scrapingDay(reference)
-    return !day || recordedDay === day || (!recordedDay && day === scrapingTransitionDay)
-  })
-  const showUndated = day === scrapingTransitionDay && references.some(reference => !scrapingDay(reference))
+  const { references, accounts, models, captionUses } = data
   const accountNames = new Map(accounts.map(account => [account.id, account.name]))
   const modelNames = new Map(models.map(model => [model.id, model.name]))
   const usesByReference = new Map<string, string[]>()
@@ -144,25 +133,20 @@ export function Tylan({ profileNames, today, progress, data, selectedDate, defau
         <h2 id="tylan-list-title">Publications enregistrées</h2>
         <span className="sub">{references.length} publication{references.length === 1 ? '' : 's'}</span>
       </div>
-      <ScrapingDayFilter today={today} day={day} onChange={setDayOverride} progress={progress}
-        agents={profileNames} />
-      {showUndated && <p className="sub">Les anciennes publications sans date sont aussi affichées pour cette journée de transition.</p>}
-      {references.length === 0 ? <p className="empty">Aucune publication de référence pour cette sélection.</p> :
+      {references.length === 0 ? <p className="empty">Aucune publication de référence enregistrée.</p> :
         <ul className="reference-list">
           {references.map(reference => {
             const url = webUrl(reference.url)
             const uses = usesByReference.get(reference.id) ?? []
-            const number = progress.numbers.get(reference)
             const highlighted = reference.id === highlightedId
             return <li key={reference.id} className="settings reference-card" tabIndex={-1}
               ref={highlighted ? highlightedCard : undefined}
               style={highlighted ? { backgroundColor: '#fef3c7', boxShadow: 'inset 0 0 0 2px #b45309' } : undefined}>
               <div className="section-head">
-                <div><p className="eyebrow">{number && number <= dailyScrapingGoal ? number + ' / ' + dailyScrapingGoal + ' · Auteur' : 'Auteur'}</p><h3>{reference.author}</h3></div>
+                <div><p className="eyebrow">Auteur</p><h3>{reference.author}</h3></div>
                 <button className="btn" aria-label={'Modifier la publication de ' + reference.author}
                   onClick={() => { setHighlightedId(''); setEditor({ reference }) }}>Modifier</button>
               </div>
-              {!scrapingDay(reference) && <p className="sub">Date d’ajout inconnue</p>}
               {reference.caption && <p className="caption reference-caption">{reference.caption}</p>}
               <dl className="reference-meta">
                 <div><dt>Réactions</dt><dd>{reactionFormat.format(reference.reactions)}</dd></div>
@@ -190,7 +174,6 @@ export function Tylan({ profileNames, today, progress, data, selectedDate, defau
     {editor && <ReferenceEditor reference={editor.reference} defaultAgentName={defaultAgentName} onClose={() => setEditor(null)} onSave={onSave}
       onLocate={id => {
         setEditor(null)
-        if (!references.some(reference => reference.id === id)) setDayOverride('')
         setHighlightedId(id)
       }} />}
   </>

@@ -795,7 +795,6 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     }
 
     const key = publicationKey(url)
-    let assignedDay: string | undefined
     const addedAt = new Date()
     const addedOn = todayKey(addedAt)
     let conflict: string | { message: string; referenceId: string } = 'Cette publication n’est plus disponible dans la liste.'
@@ -816,12 +815,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       }
 
       const previous = current.references.find(reference => reference.id === id)
-      assignedDay = previous && scrapingBucket(previous.agent, '') === scrapingBucket(fields.agent, '')
-        ? previous.quotaDay : nextScrapingDay(current, fields.agent, addedAt)
       const reference = { ...previous, ...fields, url, id: id ?? crypto.randomUUID(),
         addedOn: previous ? previous.addedOn : addedOn,
         addedAt: previous ? previous.addedAt : addedAt.toISOString(),
-        quotaDay: assignedDay,
       }
       const existing = current.references.map(item => {
         if (item.id === id) return reference
@@ -832,9 +828,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       return { ...current, references }
     })
     if (result === 'saved') {
-      notice(!id && assignedDay && assignedDay !== addedOn
-        ? 'Publication comptabilisée le ' + formatDate(fromKey(assignedDay), { dateStyle: 'long' }) + '.'
-        : 'Publication de référence enregistrée.')
+      notice('Publication de référence enregistrée.')
       return ''
     }
     return result === 'conflict' ? conflict : 'Impossible d’enregistrer cette publication.'
@@ -891,9 +885,9 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
 
   const modelIds = new Set(data.models.map(model => model.id))
   const activeModel = modelFilter === 'unassigned' || modelIds.has(modelFilter) ? modelFilter : ''
-  const scrapingAgents = [defaultAgentName, ...data.references.map(item => item.agent),
+  const scrapingAgents = [defaultAgentName,
     ...(data.submittedPosts ?? []).map(item => item.agent)].filter(Boolean)
-  const progress = scrapingProgress([...data.references, ...(data.submittedPosts ?? [])])
+  const progress = scrapingProgress(data.submittedPosts ?? [])
   const orderedAccounts = [...data.accounts].sort((a, b) =>
     a.name.localeCompare(b.name, 'fr', { numeric: true, sensitivity: 'base' }))
   const unassigned = orderedAccounts.filter(account => !account.modelId || !modelIds.has(account.modelId))
@@ -1109,7 +1103,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       </> : page === 'submissions' ? <SubmittedPosts profileNames={scrapingAgents} today={objectiveToday} progress={progress} posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName} storageKey={storageKey}
         onSave={saveSubmittedPost} onRemove={removeSubmittedPost} />
         : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
-        : <Tylan profileNames={scrapingAgents} today={objectiveToday} progress={progress} data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
+        : <Tylan data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>
     {openGroup && <Modal title={openGroup.name} onClose={() => setEditor(null)}>
       <div className="account-actions">
