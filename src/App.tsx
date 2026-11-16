@@ -1079,7 +1079,6 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       {page === 'profile' ? <><AgentProfile email={email} savedProfile={agentProfile}
         loadError={profileError} onSave={setAgentProfile} />
         <PresenceSettings {...agentPresence} />
-        <AgentDock presence={agentPresence.presence} onDirectory={() => setPage('presence')} />
         {isAdmin && <AgencyLogoSettings onSave={setAgencyLogo} />}
       </> : page === 'planning' ? <>
         <WeekPicker selected={selected} onSelect={selectDay} />
@@ -1152,6 +1151,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
         : <Tylan data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>
+    <AgentDock presence={agentPresence.presence} onDirectory={() => setPage('presence')} />
     {openGroup && <Modal title={openGroup.name} onClose={() => setEditor(null)}>
       <div className="account-actions">
         <button className="btn" onClick={() => setEditor({ type: 'account', modelId: openGroup.id ?? undefined })}>Ajouter un compte</button>

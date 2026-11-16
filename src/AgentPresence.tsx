@@ -18,9 +18,14 @@ async function presenceRequest(method: 'GET' | 'POST' | 'PUT', signal?: AbortSig
     body: method === 'PUT' ? JSON.stringify({ visible }) : undefined,
     signal,
   })
-  const result: Presence & { error?: string } = await response.json()
   if (response.status === 401) window.dispatchEvent(new Event('planning-session-expired'))
-  if (!response.ok) throw new Error(result.error || 'Les statuts sont indisponibles.')
+  const result: (Presence & { error?: string }) | null = await response.json().catch(() => null)
+  if (!response.ok || !result || !Array.isArray(result.agents) || typeof result.visible !== 'boolean') {
+    if (response.status === 404 || (response.ok && !result)) {
+      throw new Error('La route /api/auth/presence est indisponible. Vérifie le déploiement du panneau.')
+    }
+    throw new Error(result?.error || 'Les statuts sont indisponibles.')
+  }
   return result
 }
 
