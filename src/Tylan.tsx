@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
 import { CaptionUseEditor } from './CaptionUseEditor'
-import { webUrl } from './planning'
+import { captionAccountsByReference, webUrl } from './planning'
 import type { CaptionTarget, Planning, TylanReference } from './planning'
 
 const reactionFormat = new Intl.NumberFormat('fr-FR')
@@ -109,19 +109,9 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
       window.clearTimeout(timer)
     }
   }, [highlightedId])
-  const { references, accounts, models, captionUses } = data
-  const accountNames = new Map(accounts.map(account => [account.id, account.name]))
+  const { references, accounts, models } = data
   const modelNames = new Map(models.map(model => [model.id, model.name]))
-  const usesByReference = new Map<string, string[]>()
-  for (const use of captionUses) {
-    const accountName = accountNames.get(use.accountId)
-    if (!accountName) continue
-
-    const label = accountName + ' · ' + (modelNames.get(use.modelId) ?? use.modelName)
-    const labels = usesByReference.get(use.referenceId) ?? []
-    labels.push(label)
-    usesByReference.set(use.referenceId, labels)
-  }
+  const accountsByReference = captionAccountsByReference(data)
   return <>
     <header className="top">
       <div><p className="eyebrow">Publications de référence</p><h1>Scrapping Tylan</h1>
@@ -137,7 +127,8 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
         <ul className="reference-list">
           {references.map(reference => {
             const url = webUrl(reference.url)
-            const uses = usesByReference.get(reference.id) ?? []
+            const usedAccountIds = accountsByReference.get(reference.id)
+            const uses = accounts.filter(account => usedAccountIds?.has(account.id))
             const highlighted = reference.id === highlightedId
             return <li key={reference.id} className="settings reference-card" tabIndex={-1}
               ref={highlighted ? highlightedCard : undefined}
@@ -155,7 +146,9 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
               <div className="reference-uses">
                 {uses.length > 0 ? <>
                   <h4>Utilisée par</h4>
-                  <ul>{uses.map((use, index) => <li key={index}>{use}</li>)}</ul>
+                  <ul>{uses.map(account => <li key={account.id}>
+                    {account.name} · {(account.modelId && modelNames.get(account.modelId)) || 'Sans modèle'}
+                  </li>)}</ul>
                 </> : <p className="sub">Aucune utilisation dans le planning.</p>}
               </div>
               <div className="reference-actions">

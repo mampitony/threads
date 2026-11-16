@@ -14,7 +14,7 @@ import { Modal } from './Modal'
 import { Tylan } from './Tylan'
 import { ModelEditor } from './Models'
 import {
-  dateKey, emptyPost, exportCsv, formatDate, fromKey, loadPlanning, postKey, initialPlanning as emptyWorkspace,
+  captionKey, dateKey, emptyPost, exportCsv, formatDate, fromKey, loadPlanning, postKey, initialPlanning as emptyWorkspace,
   isDateKey, nextScrapingDay, readPlanning, scrapingBucket, scrapingProgress, scrapingToday, shiftDate, slots, todayKey, webUrl,
 } from './planning'
 import type { Account, CaptionTarget, Model, Planning, Post, Slot, SubmittedPost, TylanReference } from './planning'
@@ -263,10 +263,6 @@ function AccountEditor({ account, models, modelId, onClose, onSave }: {
       </div>
     </form>
   </Modal>
-}
-
-function captionKey(value: string) {
-  return value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr')
 }
 
 function captionRecipients(data: Planning, caption: string, sourceId: string) {

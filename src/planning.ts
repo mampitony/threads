@@ -168,6 +168,32 @@ export function nextScrapingDay(planning: Planning, agent: string, now = new Dat
 export const postKey = (date: string, account: Account, slot: Slot) =>
   [date, account.id, slot].join('|')
 
+export function captionKey(value: string) {
+  return value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('fr')
+}
+
+export function captionAccountsByReference({ references, posts, captionUses }: Planning) {
+  const accountsByCaption = new Map<string, Set<string>>()
+  for (const [key, post] of Object.entries(posts)) {
+    const accountId = key.split('|')[1]
+    const caption = captionKey(post.caption ?? '')
+    if (!caption || !accountId) continue
+
+    const accounts = accountsByCaption.get(caption) ?? new Set<string>()
+    accounts.add(accountId)
+    accountsByCaption.set(caption, accounts)
+  }
+
+  const accountsByReference = new Map(references.map(reference => [
+    reference.id,
+    new Set(accountsByCaption.get(captionKey(reference.caption))),
+  ]))
+  for (const use of captionUses) {
+    accountsByReference.get(use.referenceId)?.add(use.accountId)
+  }
+  return accountsByReference
+}
+
 export function webUrl(value: string) {
   try {
     const url = new URL(value)
