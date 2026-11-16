@@ -3,10 +3,15 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
 import { CaptionUseEditor } from './CaptionUseEditor'
-import { captionAccountsByReference, webUrl } from './planning'
+import { captionAccountsByReference, captionKey, webUrl } from './planning'
 import type { CaptionTarget, Planning, TylanReference } from './planning'
 
 const reactionFormat = new Intl.NumberFormat('fr-FR')
+
+function searchText(value: string) {
+  return captionKey(value).normalize('NFD').replace(/\p{M}/gu, '')
+}
+
 type SaveReference = (
   fields: Omit<TylanReference, 'id'>,
   id?: string,
@@ -96,6 +101,7 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
   const [editor, setEditor] = useState<{ reference?: TylanReference } | null>(null)
   const [selected, setSelected] = useState<TylanReference | null>(null)
   const [highlightedId, setHighlightedId] = useState('')
+  const [search, setSearch] = useState('')
   const highlightedCard = useRef<HTMLLIElement>(null)
   useEffect(() => {
     if (!highlightedId) return
@@ -112,6 +118,11 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
   const { references, accounts, models } = data
   const modelNames = new Map(models.map(model => [model.id, model.name]))
   const accountsByReference = captionAccountsByReference(data)
+  const query = searchText(search)
+  const visibleReferences = query ? references.filter(reference =>
+    [reference.author, reference.agent, reference.caption, reference.url].some(value =>
+      searchText(value ?? '').includes(query))
+  ) : references
   return <>
     <header className="top">
       <div><p className="eyebrow">Publications de référence</p><h1>Scrapping Tylan</h1>
@@ -121,11 +132,20 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
     <section aria-labelledby="tylan-list-title">
       <div className="section-head">
         <h2 id="tylan-list-title">Publications enregistrées</h2>
-        <span className="sub">{references.length} publication{references.length === 1 ? '' : 's'}</span>
+        <span className="sub" role="status">{query
+          ? visibleReferences.length + ' / ' + references.length + ' publications'
+          : references.length + ' publication' + (references.length === 1 ? '' : 's')}</span>
       </div>
-      {references.length === 0 ? <p className="empty">Aucune publication de référence enregistrée.</p> :
+      <label style={{ marginBottom: 13 }}>
+        Rechercher une publication
+        <input type="search" value={search} onChange={event => setSearch(event.target.value)}
+          placeholder="Auteur, agent, légende ou lien" />
+      </label>
+      {visibleReferences.length === 0 ? <p className="empty">{query
+        ? 'Aucune publication ne correspond à cette recherche.'
+        : 'Aucune publication de référence enregistrée.'}</p> :
         <ul className="reference-list">
-          {references.map(reference => {
+          {visibleReferences.map(reference => {
             const url = webUrl(reference.url)
             const usedAccountIds = accountsByReference.get(reference.id)
             const uses = accounts.filter(account => usedAccountIds?.has(account.id))
@@ -167,6 +187,7 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
     {editor && <ReferenceEditor reference={editor.reference} defaultAgentName={defaultAgentName} onClose={() => setEditor(null)} onSave={onSave}
       onLocate={id => {
         setEditor(null)
+        setSearch('')
         setHighlightedId(id)
       }} />}
   </>
