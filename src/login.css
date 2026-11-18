@@ -1,4 +1,7 @@
-.login-page {
+main.auth-page.login-page {
+  width: 100%;
+  max-width: none;
+  margin: 0;
   min-height: 100dvh;
   display: grid;
   place-items: center;
@@ -8,10 +11,11 @@
   color: #252336;
 }
 
-.login-card {
+.login-page .login-card {
   display: grid;
-  grid-template-columns: 1.08fr 1fr;
-  width: min(100%, 920px);
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+  overflow-wrap: normal;
+  width: min(100%, 960px);
   padding: 0;
   border: 0;
   border-radius: 18px;
@@ -20,13 +24,13 @@
   box-shadow: 0 18px 55px #4217a64d;
 }
 
-.login-art {
+.login-page .login-art {
   position: relative;
   isolation: isolate;
   overflow: hidden;
   display: grid;
   place-items: center;
-  min-height: 560px;
+  min-height: 500px;
   padding: 40px;
   color: white;
   text-align: center;
@@ -78,7 +82,7 @@
 .login-orb-top { width: 85px; height: 85px; top: 16%; left: 35%; }
 .login-orb-bottom { width: 115px; height: 115px; bottom: 16%; left: 22%; }
 
-.login-form-panel {
+.login-page .login-form-panel {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -86,9 +90,10 @@
   padding: 52px 44px;
 }
 .login-form-panel .eyebrow { color: #9a36c5; font-size: 11px; letter-spacing: .09em; }
-.login-form-panel h1 {
+.login-page .login-form-panel h1 {
   font-family: inherit;
-  font-size: 25px;
+  font-size: clamp(24px, 3vw, 30px);
+  line-height: 1.2;
   color: #252336;
   margin: 10px 0;
 }
@@ -156,12 +161,12 @@
   white-space: nowrap;
 }
 @media (max-width: 680px) {
-  .login-page { padding: 24px 16px; }
-  .login-card { grid-template-columns: 1fr; }
-  .login-art { min-height: 170px; padding: 28px 24px; }
+  main.auth-page.login-page { padding: 24px 16px; }
+  .login-page .login-card { grid-template-columns: 1fr; }
+  .login-page .login-art { min-height: 170px; padding: 28px 24px; }
   .login-art::after { display: none; }
   .login-orb-top { width: 55px; height: 55px; top: 14px; left: 8%; }
   .login-orb-bottom { width: 65px; height: 65px; bottom: -15px; left: 77%; }
   .login-art h2 { font-size: 28px; }
-  .login-form-panel { padding: 28px 26px 32px; }
+  .login-page .login-form-panel { padding: 28px 26px 32px; }
 }
