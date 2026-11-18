@@ -65,6 +65,12 @@ function LoginForm({ onConnect }: { onConnect: (user: Session) => void }) {
 
   return <main className="auth-page login-page">
     <section className="settings auth-card login-card" aria-labelledby="auth-title">
+      <div className="login-art">
+        <span className="login-orb login-orb-top" aria-hidden="true" />
+        <div><h2>Bienvenue</h2><p>Gestion de publications</p></div>
+        <span className="login-orb login-orb-bottom" aria-hidden="true" />
+      </div>
+      <div className="login-form-panel">
       <p className="eyebrow">Planning des publications</p>
       <h1 id="auth-title">{resetToken ? 'Nouveau mot de passe' : forgot ? 'Mot de passe oublié' : register ? 'Créer un compte' : 'Connexion'}</h1>
       <p className="sub">{resetToken ? 'Choisis ton nouveau mot de passe.' : forgot ? 'Reçois un lien de réinitialisation par e-mail.' : register ? 'Crée ton accès au panneau.' : 'Connecte-toi pour ouvrir ton planning.'}</p>
@@ -100,6 +106,7 @@ function LoginForm({ onConnect }: { onConnect: (user: Session) => void }) {
           setRegister(false)
         } else setRegister(!register)
       }}>{forgot || resetToken || register ? 'Retour à la connexion' : 'Créer un compte'}</button>
+      </div>
     </section>
   </main>
 }
