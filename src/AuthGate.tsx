@@ -1,32 +1,40 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { App } from './App'
+import './login.css'
 import { planningStorageKey } from './planning'
 
 type Session = { id: string; email: string; firstAccount: boolean; isAdmin: boolean; sharedPlanning: boolean; expiresAt: number }
 
-async function authRequest(action: 'session' | 'login' | 'register' | 'logout', fields?: object) {
+async function authRequest(action: 'session' | 'login' | 'register' | 'logout' | 'forgot-password' | 'reset-password', fields?: object) {
   const response = await fetch('/api/auth/' + action, action === 'session' ? undefined : {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-planning-auth': '1' },
     body: JSON.stringify(fields ?? {}),
   })
-  const data: { user: Session | null; pending?: boolean; error?: string } = await response.json()
+  const data: { user: Session | null; pending?: boolean; message?: string; error?: string } = await response.json()
   if (!response.ok) throw new Error(data.error || 'Le service de connexion est indisponible.')
   return data
 }
 
 function LoginForm({ onConnect }: { onConnect: (user: Session) => void }) {
   const [register, setRegister] = useState(false)
+  const [resetToken, setResetToken] = useState(() => {
+    const token = new URLSearchParams(window.location.hash.slice(1)).get('reset-password') ?? ''
+    if (token) window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    return token
+  })
+  const [forgot, setForgot] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (busy) return
     const form = new FormData(event.currentTarget)
     const password = form.get('password')
-    if (register && password !== form.get('confirmation')) {
+    if ((register || resetToken) && password !== form.get('confirmation')) {
       setError('Les deux mots de passe doivent être identiques.')
       return
     }
@@ -34,6 +42,13 @@ function LoginForm({ onConnect }: { onConnect: (user: Session) => void }) {
     setError('')
     setMessage('')
     try {
+      if (forgot || resetToken) {
+        const result = await authRequest(resetToken ? 'reset-password' : 'forgot-password',
+          resetToken ? { token: resetToken, password } : { email: form.get('email') })
+        setMessage(result.message || 'Demande enregistrée.')
+        if (resetToken) setResetToken('')
+        return
+      }
       const { user, pending } = await authRequest(register ? 'register' : 'login', { email: form.get('email'), password, bootstrapCode: form.get('bootstrapCode') })
       if (user) onConnect(user)
       else if (pending) {
@@ -48,40 +63,49 @@ function LoginForm({ onConnect }: { onConnect: (user: Session) => void }) {
     }
   }
 
-  return <main className="auth-page">
-    <section className="settings auth-card" aria-labelledby="auth-title">
+  return <main className="auth-page login-page">
+    <section className="settings auth-card login-card" aria-labelledby="auth-title">
       <p className="eyebrow">Planning des publications</p>
-      <h1 id="auth-title">{register ? 'Créer un compte' : 'Connexion'}</h1>
-      <p className="sub">{register ? 'Crée ton accès au panneau.' : 'Connecte-toi pour ouvrir ton planning.'}</p>
+      <h1 id="auth-title">{resetToken ? 'Nouveau mot de passe' : forgot ? 'Mot de passe oublié' : register ? 'Créer un compte' : 'Connexion'}</h1>
+      <p className="sub">{resetToken ? 'Choisis ton nouveau mot de passe.' : forgot ? 'Reçois un lien de réinitialisation par e-mail.' : register ? 'Crée ton accès au panneau.' : 'Connecte-toi pour ouvrir ton planning.'}</p>
       {message && <p className="sub" role="status">{message}</p>}
       <form key={String(register)} onSubmit={submit}>
-        <label>Adresse e-mail<input name="email" type="email" required maxLength={254} autoComplete="email" /></label>
-        <label>Mot de passe<input name="password" type="password" required minLength={register ? 12 : undefined}
-          maxLength={128} autoComplete={register ? 'new-password' : 'current-password'} /></label>
-        {register && <>
+        {!resetToken && <label className="login-field"><span aria-hidden="true">✉</span><span className="sr-only">Adresse e-mail</span>
+          <input name="email" type="email" placeholder="Adresse e-mail" required maxLength={254} autoComplete="email" disabled={busy} /></label>}
+        {!forgot && <label className="login-field"><span aria-hidden="true">▣</span><span className="sr-only">Mot de passe</span>
+          <input name="password" type="password" placeholder="Mot de passe" required minLength={register || resetToken ? 12 : undefined}
+            maxLength={128} autoComplete={register || resetToken ? 'new-password' : 'current-password'} disabled={busy} /></label>}
+        {(register || resetToken) && <>
           <p className="sub">Utilise au moins 12 caractères.</p>
-          <label>Confirmer le mot de passe<input name="confirmation" type="password" required
-            maxLength={128} autoComplete="new-password" /></label>
-          <details>
+          <label className="login-confirm">Confirmer le mot de passe<input name="confirmation" type="password" required
+            maxLength={128} autoComplete="new-password" disabled={busy} /></label>
+          {register && <details>
             <summary>Premier administrateur sur Vercel</summary>
             <label>Code d’installation<input name="bootstrapCode" type="password" maxLength={128} autoComplete="off" /></label>
-          </details>
+          </details>}
         </>}
+        {!register && !forgot && !resetToken && <button className="login-forgot" type="button" disabled={busy}
+          onClick={() => { setForgot(true); setError(''); setMessage('') }}>Mot de passe oublié ?</button>}
         {error && <p className="form-error" role="alert">{error}</p>}
-        <button className="btn primary" type="submit" disabled={busy}>
-          {busy ? 'Veuillez patienter…' : register ? 'Créer mon compte' : 'Se connecter'}
+        <button className="btn primary login-submit" type="submit" disabled={busy}>
+          {busy ? 'Veuillez patienter…' : resetToken ? 'Enregistrer le mot de passe' : forgot ? 'Envoyer le lien' : register ? 'Créer mon compte' : 'Se connecter'}
         </button>
       </form>
       <button className="btn auth-switch" type="button" disabled={busy} onClick={() => {
         setError('')
         setMessage('')
-        setRegister(!register)
-      }}>{register ? 'J’ai déjà un compte' : 'Créer un compte'}</button>
+        if (forgot || resetToken) {
+          setForgot(false)
+          setResetToken('')
+          setRegister(false)
+        } else setRegister(!register)
+      }}>{forgot || resetToken || register ? 'Retour à la connexion' : 'Créer un compte'}</button>
     </section>
   </main>
 }
 
 export function AuthGate() {
+  const [resetRequested] = useState(() => new URLSearchParams(window.location.hash.slice(1)).has('reset-password'))
   const [session, setSession] = useState<Session | null | undefined>(undefined)
   const [serviceError, setServiceError] = useState('')
   const [logoutError, setLogoutError] = useState('')
@@ -125,6 +149,7 @@ export function AuthGate() {
     }
   }
 
+  if (resetRequested) return <LoginForm onConnect={connect} />
   if (session === undefined) {
     return <main className="auth-page">
       <p role={serviceError ? 'alert' : 'status'}>{serviceError || 'Vérification de la connexion…'}</p>

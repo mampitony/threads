@@ -1,3 +1,4 @@
+import { createPasswordReset } from './password-reset.mjs'
 import { readSharedPlanning, writeSharedPlanning } from './shared-planning.mjs'
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
@@ -58,6 +59,7 @@ async function readJson(req, limit = 4096) {
 
 export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = '', bootstrapCode = '' } = {}) {
 
+  const resetPassword = createPasswordReset(db)
   const usersByEmail = 'SELECT id, email, salt, hash, access FROM users WHERE email = ?'
   const sessionQuery = `SELECT users.id, users.email, users.access, sessions.expires_at FROM sessions
     JOIN users ON users.id = sessions.user_id
@@ -115,6 +117,23 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
       if (!session) return json(res, 401, { error: 'Connecte-toi pour accéder au panneau.' })
       return next()
     }
+    if (['/api/auth/forgot-password', '/api/auth/reset-password'].includes(path)) {
+      if (req.method !== 'POST') return json(res, 405, { error: 'Méthode non autorisée.' })
+      if (!trustedRequest) return json(res, 403, { error: 'Requête non autorisée.' })
+      const body = await readJson(req)
+      const ip = secureOnly ? req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown'
+        : req.socket?.remoteAddress || 'local'
+      try {
+        const [status, result] = await resetPassword(path, body, String(ip))
+        return json(res, status, result)
+      } catch (error) {
+        if (error?.code === '42P01') {
+          return json(res, 503, { error: 'La réinitialisation doit être activée par un administrateur.' })
+        }
+        throw error
+      }
+    }
+
     if (path === '/api/auth/session' && req.method === 'GET') {
       return json(res, 200, { user: session ? await publicSession(session, session.expires_at) : null })
     }
@@ -410,11 +429,20 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
       }
     }
 
-    await db.run('DELETE FROM sessions WHERE expires_at <= ?', now)
-    if (hashedToken) await db.run('DELETE FROM sessions WHERE token_hash = ?', hashedToken)
     const newToken = randomBytes(32).toString('hex')
     const expiresAt = Date.now() + sessionSeconds * 1000
-    await db.run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)', digest(newToken), user.id, expiresAt)
+    const authenticated = await db.transaction(async transaction => {
+      const current = await transaction.get('SELECT hash, access FROM users WHERE id = ?', user.id)
+      if (!current || !['admin', 'approved'].includes(current.access)
+        || !timingSafeEqual(hash, current.hash)) return false
+      await transaction.run('DELETE FROM sessions WHERE expires_at <= ?', Date.now())
+      if (hashedToken) await transaction.run('DELETE FROM sessions WHERE token_hash = ?', hashedToken)
+      await transaction.run('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)',
+        digest(newToken), user.id, expiresAt)
+      user.access = current.access
+      return true
+    })
+    if (!authenticated) return json(res, 401, { error: invalidCredentials })
     res.setHeader('Set-Cookie', cookie(req, newToken, sessionSeconds, secureOnly))
     return json(res, register ? 201 : 200, { user: await publicSession(user, expiresAt) })
   }

@@ -5,6 +5,10 @@ import { openSqliteAuth } from './server/auth-sqlite.mjs'
 import { threadsLikesMiddleware } from './server/threads-likes.mjs'
 
 export default defineConfig(({ mode }) => {
+  const resetEnv = loadEnv(mode, process.cwd(), '')
+  for (const key of ['RESEND_API_KEY', 'RESET_EMAIL_FROM', 'APP_URL', 'GMAIL_USER', 'GMAIL_APP_PASSWORD']) {
+    if (!process.env[key] && resetEnv[key]) process.env[key] = resetEnv[key]
+  }
   const { SCRAPEATLAS_API_KEY } = loadEnv(mode, process.cwd(), 'SCRAPEATLAS_')
   const likesMiddleware = threadsLikesMiddleware(SCRAPEATLAS_API_KEY)
   function configure(server) {
