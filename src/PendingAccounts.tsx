@@ -44,13 +44,15 @@ export function PendingAccounts({ email }: { email: string }) {
   useEffect(() => { void refresh() }, [])
 
   async function changeAccess(account: AccountAccess, access: Access) {
+    if (access === 'refused' && account.access !== 'pending'
+      && !window.confirm('Supprimer l’accès de ' + account.email + ' ? Toutes ses sessions seront fermées.')) return
     setBusy(true)
     setError('')
     setMessage('')
     try {
       setAccounts(await accountRequest(account, access))
       if (account.email === email && access !== 'admin') window.location.reload()
-      else setMessage('Accès mis à jour pour ' + account.email + '.')
+      else setMessage((access === 'refused' ? 'Accès supprimé pour ' : 'Accès mis à jour pour ') + account.email + '.')
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : 'Impossible de modifier ce compte.')
     } finally {
@@ -89,6 +91,10 @@ export function PendingAccounts({ email }: { email: string }) {
                 {account.access === 'approved' && <button className="btn" disabled={busy}
                   aria-label={'Nommer administrateur ' + account.email}
                   onClick={() => void changeAccess(account, 'admin')}>Nommer administrateur</button>}
+                {(account.access === 'approved' || account.access === 'admin') && <button className="btn danger"
+                  disabled={busy || (account.access === 'admin' && numberOfAdmins <= 1)}
+                  aria-label={'Supprimer l’accès de ' + account.email}
+                  onClick={() => void changeAccess(account, 'refused')}>Supprimer l’accès</button>}
                 {account.access === 'admin' && <button className="btn" disabled={busy || numberOfAdmins <= 1}
                   aria-label={'Passer en compte simple ' + account.email}
                   onClick={() => void changeAccess(account, 'approved')}>Passer en compte simple</button>}

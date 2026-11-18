@@ -249,14 +249,14 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
         if (req.method !== 'PUT' || agentId !== null) {
           return json(res, 405, { error: 'Méthode non autorisée.' })
         }
-        const body = await readJson(req, 660_000)
+        const body = await readJson(req, 1_710_000)
         const name = typeof body?.name === 'string' ? body.name.trim() : ''
         const photo = body?.photo
         const cover = body?.cover
         const validPhoto = (value, limit) => typeof value === 'string' && value.length <= limit
           && (!value || /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value))
         if (!name || name.length > 100 || !validPhoto(photo, 200_000)
-          || (cover !== undefined && !validPhoto(cover, 450_000))) {
+          || (cover !== undefined && !validPhoto(cover, 1_500_000))) {
           return json(res, 400, { error: 'Nom ou image de profil invalide.' })
         }
         const saved = await db.get(
@@ -288,7 +288,7 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
       const body = await readJson(req)
       if (typeof body?.id !== 'string' || !/^[a-f0-9-]{36}$/.test(body.id)
         || !accessStates.includes(body.previous) || !['admin', 'approved', 'refused'].includes(body.access)
-        || (body.access === 'refused' && body.previous !== 'pending')) {
+        ) {
         return json(res, 400, { error: 'Modification de compte invalide.' })
       }
 
