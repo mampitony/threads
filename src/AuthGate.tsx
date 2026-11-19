@@ -12,8 +12,13 @@ async function authRequest(action: 'session' | 'login' | 'register' | 'logout' |
     headers: { 'Content-Type': 'application/json', 'x-planning-auth': '1' },
     body: JSON.stringify(fields ?? {}),
   })
-  const data: { user: Session | null; pending?: boolean; message?: string; error?: string } = await response.json()
-  if (!response.ok) throw new Error(data.error || 'Le service de connexion est indisponible.')
+  const data: { user: Session | null; pending?: boolean; message?: string; error?: string } | null =
+    await response.json().catch(() => null)
+  if (!response.ok || !data) {
+    if (response.status === 404) throw new Error('Le service demandé est introuvable sur le serveur (404).')
+    if (!data) throw new Error('Le serveur a renvoyé une réponse invalide (' + response.status + ').')
+    throw new Error(data.error || 'Le service de connexion est indisponible.')
+  }
   return data
 }
 
