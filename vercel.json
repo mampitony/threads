@@ -3,6 +3,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/threads-likes.js": { "maxDuration": 35 }
-  }
+    "api/router.js": { "maxDuration": 35 }
+  },
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/router?__path=:path*" }
+  ]
 }
