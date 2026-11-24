@@ -1,3 +1,4 @@
+import { Renewals } from './Renewals'
 import { ScrapingGoals } from './ScrapingGoals'
 import './loading.css'
 import { AgentDock, AgentPresence, PresenceSettings, useAgentPresence } from './AgentPresence'
@@ -461,7 +462,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   }
   const [filter, setFilter] = useState('')
   const [modelFilter, setModelFilter] = useState('')
-  const [page, setActivePage] = useState<'planning' | 'dashboard' | 'performance' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile' | 'presence'>('dashboard')
+  const [page, setActivePage] = useState<'planning' | 'dashboard' | 'performance' | 'accounts' | 'tylan' | 'approvals' | 'submissions' | 'profile' | 'presence' | 'renewals'>('dashboard')
   const agentPresence = useAgentPresence()
   const [viewedAgent, setViewedAgent] = useState<{ id: string; name: string }>()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -1055,6 +1056,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     }}>
       <div className="brand"><span className="brand-icon"><Icon name="calendar" /></span>Plan de posts</div>
       <nav aria-label="Navigation principale">
+        <button aria-current={page === 'renewals' ? 'page' : undefined} onClick={() => setPage('renewals')}><Icon name="calendar" />Renouvellement de compte</button>
         <button aria-current={page === 'dashboard' ? 'page' : undefined} onClick={() => setPage('dashboard')}><Icon name="stats" />Tableau de bord</button>
         <button aria-current={page === 'performance' ? 'page' : undefined} onClick={() => setPage('performance')}><Icon name="stats" />Performance des comptes</button>
         <button aria-current={page === 'planning' ? 'page' : undefined} onClick={() => setPage('planning')}><Icon name="calendar" />Planning</button>
@@ -1160,6 +1162,19 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         }} />}
         <SubmittedPosts profileNames={scrapingAgents} today={objectiveToday} progress={progress} posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName} storageKey={storageKey}
         onSave={saveSubmittedPost} onRemove={removeSubmittedPost} /></>
+        : page === 'renewals' ? <Renewals data={data} onSave={async (entry, previous) => {
+          return await commit(current => {
+            const entries = current.renewals ?? []
+            if (previous && !entries.some(item => JSON.stringify(item) === JSON.stringify(previous))) return null
+            if (!previous && !current.accounts.some(account => account.id === entry.accountId)) return null
+            return { ...current, renewals: previous ? entries.map(item => item.id === previous.id ? entry : item) : [...entries, entry] }
+          }) === 'saved'
+        }} onRemove={async entry => {
+          return await commit(current => {
+            if (!(current.renewals ?? []).some(item => JSON.stringify(item) === JSON.stringify(entry))) return null
+            return { ...current, renewals: (current.renewals ?? []).filter(item => item.id !== entry.id) }
+          }) === 'saved'
+        }} />
         : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
         : <Tylan data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>

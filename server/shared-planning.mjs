@@ -39,6 +39,12 @@ function validSubmittedPosts(posts) {
 
 function validPlanning(data) {
   return object(data)
+    && (data.renewals === undefined || (Array.isArray(data.renewals) && data.renewals.length <= 10000
+      && new Set(data.renewals.map(item => item?.id)).size === data.renewals.length
+      && data.renewals.every(item => object(item) && text(item.id) && item.id.length > 0 && item.id.length <= 100
+        && text(item.accountId) && item.accountId.length > 0 && item.accountId.length <= 150
+        && text(item.accountName) && item.accountName.trim().length > 0 && item.accountName.length <= 150
+        && text(item.date) && optionalDate(item.date))))
     && (data.scrapingGoals === undefined || (object(data.scrapingGoals)
       && Object.keys(data.scrapingGoals).length <= 1000
       && Object.entries(data.scrapingGoals).every(([agent, goal]) =>

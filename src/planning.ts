@@ -34,7 +34,10 @@ export type SubmittedPost = {
   quotaDay?: string
 }
 
+export type Renewal = { id: string; accountId: string; accountName: string; date: string }
+
 export type Planning = {
+  renewals?: Renewal[]
   scrapingGoals?: Record<string, number>
   accounts: Account[]
   models: Model[]
