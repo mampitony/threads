@@ -15,8 +15,23 @@ const accessStates = ['admin', 'approved', 'pending', 'refused']
 const invalidCredentials = 'E-mail ou mot de passe incorrect.'
 
 function json(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
-  res.end(JSON.stringify(body))
+  const payload = JSON.stringify(body)
+  const req = res.req
+  const path = (req?.url ?? '/').split('?')[0]
+
+  console.info('[api-size]', {
+    method: req?.method,
+    path,
+    status,
+    bytes: Buffer.byteLength(payload ?? '', 'utf8'),
+  })
+
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+  })
+
+  res.end(payload)
 }
 
 function sessionToken(req) {
@@ -100,7 +115,7 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
           return json(res, 400, { error: 'Format du planning invalide.' })
         }
         const body = await readJson(req, 2 * 1024 * 1024)
-        const [status, result] = await writeSharedPlanning(db, body)
+        const [status, result] = await writeSharedPlanning(db, body, session.access === 'admin')
         return json(res, status, result)
       } catch (error) {
         if (error?.code === '42P01') {
