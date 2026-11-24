@@ -1,3 +1,4 @@
+import { accountRenewalAge } from './renewalAge'
 import { Renewals } from './Renewals'
 import { ScrapingGoals } from './ScrapingGoals'
 import './loading.css'
@@ -75,10 +76,11 @@ function WeekPicker({ selected, onSelect }: { selected: string; onSelect: (day: 
   </section>
 }
 
-function AccountCard({ account, date, posts, onEdit }: {
+function AccountCard({ account, date, posts, renewalAge, onEdit }: {
   account: Account
   date: string
   posts: Planning['posts']
+  renewalAge: number | null
   onEdit: (slot: Slot) => void
 }) {
   const initials = account.name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase()
@@ -87,7 +89,12 @@ function AccountCard({ account, date, posts, onEdit }: {
   return <article className="account" style={{ '--account-hue': hue } as CSSProperties}>
     <header className="account-head">
       <span className="avatar" aria-hidden="true">{initials}</span>
-      <div><h3>{account.name}</h3><p className="handle">@{account.handle}</p></div>
+      <div><h3>{account.name}</h3><p className="handle">@{account.handle}</p>
+        {renewalAge !== null && <p style={{ marginBlockStart: 5, fontSize: 11, fontWeight: 700,
+          padding: '3px 6px', borderRadius: 6, background: '#e1f2e9', color: '#205947' }}>
+          Âge : {renewalAge} {renewalAge === 1 ? 'jour' : 'jours'} depuis renouvellement
+        </p>}
+      </div>
     </header>
     <div className="slots" tabIndex={0} role="region" aria-label={'Créneaux de ' + account.name}>
       {slots.map(slot => {
@@ -1120,6 +1127,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           {accounts.length === 0 && <p className="empty">Aucun compte pour ce modèle.</p>}
           <div className="accounts">
             {accounts.map(account => <AccountCard key={account.id} account={account} date={selected} posts={data.posts}
+              renewalAge={accountRenewalAge(data.renewals ?? [], account.id, today)}
               onEdit={slot => setEditor({ type: 'post', account, slot, date: selected })} />)}
           </div>
         </section>
