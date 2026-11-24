@@ -1,13 +1,32 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { formatDate, fromKey, isDateKey, todayKey } from './planning'
 import type { Planning, Renewal } from './planning'
+
+function renewalAgeLabel(date: string, today: string) {
+  if (!isDateKey(date)) return 'Âge indisponible'
+  const days = Math.round((fromKey(today).getTime() - fromKey(date).getTime()) / 86400000)
+  if (days < 0) return 'Renouvellement prévu dans ' + (-days) + (-days === 1 ? ' jour' : ' jours')
+  return 'Âge depuis le renouvellement : ' + days + (days === 1 ? ' jour' : ' jours')
+}
 
 export function Renewals({ data, onSave, onRemove }: {
   data: Planning
   onSave: (entry: Renewal, previous?: Renewal) => Promise<boolean>
   onRemove: (entry: Renewal) => Promise<boolean>
 }) {
+  const [today, setToday] = useState(todayKey())
+  useEffect(() => {
+    const refresh = () => setToday(todayKey())
+    const timer = window.setInterval(refresh, 30000)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
+  }, [])
   const [editing, setEditing] = useState<Renewal | null>(null)
   const [open, setOpen] = useState(false)
   const [accountId, setAccountId] = useState('')
@@ -45,6 +64,7 @@ export function Renewals({ data, onSave, onRemove }: {
             <div><strong>{account?.name ?? entry.accountName}</strong>
               {model && <p className="sub">{model.name}</p>}
               <p className="sub">Date de renouvellement : <time dateTime={entry.date}>{formatDate(fromKey(entry.date), { dateStyle: 'long' })}</time>{entry.time && <> à <time>{entry.time}</time></>}</p>
+              <p style={{ marginBlock: '6px 0', fontWeight: 700, color: '#205947' }}>{renewalAgeLabel(entry.date, today)}</p>
               {entry.note && <p className="sub" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{entry.note}</p>}
             </div>
             <div className="account-actions">
