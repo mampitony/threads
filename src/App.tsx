@@ -1127,7 +1127,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           {accounts.length === 0 && <p className="empty">Aucun compte pour ce modèle.</p>}
           <div className="accounts">
             {accounts.map(account => <AccountCard key={account.id} account={account} date={selected} posts={data.posts}
-              renewalAge={accountRenewalAge(data.renewals ?? [], account.id, today)}
+              renewalAge={accountRenewalAge(data.renewals ?? [], account.id, now)}
               onEdit={slot => setEditor({ type: 'post', account, slot, date: selected })} />)}
           </div>
         </section>

@@ -1,23 +1,17 @@
+import { renewalAgeLabel } from './renewalAge'
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { formatDate, fromKey, isDateKey, todayKey } from './planning'
 import type { Planning, Renewal } from './planning'
-
-function renewalAgeLabel(date: string, today: string) {
-  if (!isDateKey(date)) return 'Âge indisponible'
-  const days = Math.round((fromKey(today).getTime() - fromKey(date).getTime()) / 86400000)
-  if (days < 0) return 'Renouvellement prévu dans ' + (-days) + (-days === 1 ? ' jour' : ' jours')
-  return 'Âge depuis le renouvellement : ' + days + (days === 1 ? ' jour' : ' jours')
-}
 
 export function Renewals({ data, onSave, onRemove }: {
   data: Planning
   onSave: (entry: Renewal, previous?: Renewal) => Promise<boolean>
   onRemove: (entry: Renewal) => Promise<boolean>
 }) {
-  const [today, setToday] = useState(todayKey())
+  const [now, setNow] = useState(() => new Date())
   useEffect(() => {
-    const refresh = () => setToday(todayKey())
+    const refresh = () => setNow(new Date())
     const timer = window.setInterval(refresh, 30000)
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)
@@ -64,7 +58,7 @@ export function Renewals({ data, onSave, onRemove }: {
             <div><strong>{account?.name ?? entry.accountName}</strong>
               {model && <p className="sub">{model.name}</p>}
               <p className="sub">Date de renouvellement : <time dateTime={entry.date}>{formatDate(fromKey(entry.date), { dateStyle: 'long' })}</time>{entry.time && <> à <time>{entry.time}</time></>}</p>
-              <p style={{ marginBlock: '6px 0', fontWeight: 700, color: '#205947' }}>{renewalAgeLabel(entry.date, today)}</p>
+              <p style={{ marginBlock: '6px 0', fontWeight: 700, color: '#205947' }}>{renewalAgeLabel(entry, now)}</p>
               {entry.note && <p className="sub" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{entry.note}</p>}
             </div>
             <div className="account-actions">
@@ -86,7 +80,7 @@ export function Renewals({ data, onSave, onRemove }: {
         event.preventDefault()
         if (busy) return
         const account = data.accounts.find(item => item.id === accountId)
-        if ((!account && accountId !== editing?.accountId) || !isDateKey(date) || (time !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) || note.length > 2000) {
+        if ((!account && accountId !== editing?.accountId) || !isDateKey(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time) || note.length > 2000) {
           setError('Choisis un compte et une date valides.')
           return
         }
@@ -109,7 +103,7 @@ export function Renewals({ data, onSave, onRemove }: {
           </option>)}
         </select></label>
         <label>Date de renouvellement<input type="date" required value={date} disabled={busy} onChange={event => setDate(event.target.value)} /></label>
-        <label>Heure de renouvellement (facultatif)<input type="time" step="60" value={time} disabled={busy} onChange={event => setTime(event.target.value)} /></label>
+        <label>Heure de renouvellement (Madagascar)<input required type="time" step="60" value={time} disabled={busy} onChange={event => setTime(event.target.value)} /></label>
         <label>Remarques (facultatif)<textarea rows={3} maxLength={2000} value={note} disabled={busy}
           placeholder="Écrire une remarque…" onChange={event => setNote(event.target.value)} /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
