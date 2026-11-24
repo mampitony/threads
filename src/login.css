@@ -170,3 +170,20 @@ main.auth-page.login-page {
   .login-art h2 { font-size: 28px; }
   .login-page .login-form-panel { padding: 28px 26px 32px; }
 }
+
+.login-page .password-toggle {
+  display: grid;
+  place-items: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #655873;
+  cursor: pointer;
+}
+.login-page .password-toggle:hover { background: #f1eafa; }
+.login-page .password-toggle:disabled { opacity: .5; cursor: default; }
+.login-page .login-field input { flex: 1; width: 0; }

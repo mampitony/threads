@@ -1,3 +1,5 @@
+import { ScrapingGoals } from './ScrapingGoals'
+import './loading.css'
 import { AgentDock, AgentPresence, PresenceSettings, useAgentPresence } from './AgentPresence'
 import { AccountPerformance } from './AccountPerformance'
 import { AgencyLogoSettings, agencyLogoRequest } from './AgencyLogo'
@@ -86,7 +88,7 @@ function AccountCard({ account, date, posts, onEdit }: {
       <span className="avatar" aria-hidden="true">{initials}</span>
       <div><h3>{account.name}</h3><p className="handle">@{account.handle}</p></div>
     </header>
-    <div className="slots">
+    <div className="slots" tabIndex={0} role="region" aria-label={'Créneaux de ' + account.name}>
       {slots.map(slot => {
         const post = posts[postKey(date, account, slot)]
         const url = post ? webUrl(post.url) : ''
@@ -785,6 +787,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         ? previous.quotaDay : nextScrapingDay(current, agent, addedAt)
       const updated = {
         url: canonicalUrl, agent, reactions, publishedOn, quotaDay: assignedDay,
+        imageUrl: publicPost?.imageUrl ?? (samePost ? previous.imageUrl : undefined),
+        addedBy: previous ? previous.addedBy : storageKey,
         addedOn: previous ? previous.addedOn : todayKey(addedAt),
         addedAt: previous ? previous.addedAt : addedAt.toISOString(),
       }
@@ -931,7 +935,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const activeModel = modelFilter === 'unassigned' || modelIds.has(modelFilter) ? modelFilter : ''
   const scrapingAgents = [defaultAgentName,
     ...(data.submittedPosts ?? []).map(item => item.agent)].filter(Boolean)
-  const progress = scrapingProgress(data.submittedPosts ?? [])
+  const progress = scrapingProgress(data.submittedPosts ?? [], data.scrapingGoals)
   const orderedAccounts = [...data.accounts].sort((a, b) =>
     a.name.localeCompare(b.name, 'fr', { numeric: true, sensitivity: 'base' }))
   const unassigned = orderedAccounts.filter(account => !account.modelId || !modelIds.has(account.modelId))
@@ -1010,12 +1014,13 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const openGroup = editor?.type === 'group' ? groups.find(group => group.id === editor.modelId) : undefined
 
   if (!planningReady) {
-    return <main className="auth-page">
-      <section className="settings auth-card">
-        <h2>Planning partagé</h2>
-        <p role={syncError ? 'alert' : 'status'}>{syncError || 'Chargement du planning partagé…'}</p>
+    return <main className="planning-loading">
+      {syncError ? <div className="planning-loading-error">
+        <p role="alert">{syncError}</p>
         <button className="btn" onClick={onLogout}>Se déconnecter</button>
-      </section>
+      </div> : <div role="status" aria-label="Chargement du planning">
+        <span className="planning-spinner" aria-hidden="true" />
+      </div>}
     </main>
   }
 
@@ -1050,7 +1055,6 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     }}>
       <div className="brand"><span className="brand-icon"><Icon name="calendar" /></span>Plan de posts</div>
       <nav aria-label="Navigation principale">
-        <span className="nav-label">Espace de travail</span>
         <button aria-current={page === 'dashboard' ? 'page' : undefined} onClick={() => setPage('dashboard')}><Icon name="stats" />Tableau de bord</button>
         <button aria-current={page === 'performance' ? 'page' : undefined} onClick={() => setPage('performance')}><Icon name="stats" />Performance des comptes</button>
         <button aria-current={page === 'planning' ? 'page' : undefined} onClick={() => setPage('planning')}><Icon name="calendar" />Planning</button>
@@ -1068,7 +1072,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           onClick={() => setPage('profile')}>Mon profil</button>
         <button className="btn" type="button" onClick={onLogout}>Se déconnecter</button>
       </div>
-      <div className="aside-foot"><span className="dot" /><span>{shared ? 'Planning partagé avec l’équipe' : 'Données enregistrées dans ce navigateur'}</span></div>
+      {/* <div className="aside-foot"><span className="dot" /><span>{shared ? 'Planning partagé avec l’équipe' : 'Données enregistrées dans ce navigateur'}</span></div> */}
     </aside>
     <main>
       {syncError && <p className="empty" role="status">{syncError} La synchronisation reprendra automatiquement.</p>}
@@ -1149,8 +1153,13 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
             </div>
           </section>)}
         </div>
-      </> : page === 'submissions' ? <SubmittedPosts profileNames={scrapingAgents} today={objectiveToday} progress={progress} posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName} storageKey={storageKey}
-        onSave={saveSubmittedPost} onRemove={removeSubmittedPost} />
+      </> : page === 'submissions' ? <>
+        {isAdmin && <ScrapingGoals goals={data.scrapingGoals} onSave={async goals => {
+          if (!isAdmin) return false
+          return await commit(current => ({ ...current, scrapingGoals: goals })) === 'saved'
+        }} />}
+        <SubmittedPosts profileNames={scrapingAgents} today={objectiveToday} progress={progress} posts={data.submittedPosts ?? []} defaultAgentName={defaultAgentName} storageKey={storageKey}
+        onSave={saveSubmittedPost} onRemove={removeSubmittedPost} /></>
         : page === 'approvals' && isAdmin ? <PendingAccounts email={email} />
         : <Tylan data={data} selectedDate={selected} defaultAgentName={defaultAgentName} onSave={saveReference} onDelete={removeReference} onUse={useCaption} />}
     </main>

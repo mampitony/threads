@@ -136,7 +136,7 @@ export function Tylan({ data, selectedDate, defaultAgentName, onSave, onDelete, 
           ? visibleReferences.length + ' / ' + references.length + ' publications'
           : references.length + ' publication' + (references.length === 1 ? '' : 's')}</span>
       </div>
-      <label style={{ marginBottom: 13 }}>
+      <label style={{ marginBottom: 13, width: '100%', maxWidth: 360 }}>
         Rechercher une publication
         <input type="search" value={search} onChange={event => setSearch(event.target.value)}
           placeholder="Auteur, agent, légende ou lien" />

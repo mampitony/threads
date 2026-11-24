@@ -1,0 +1,35 @@
+main.planning-loading {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: none;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 24px;
+}
+
+.planning-spinner {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border: 4px solid #dce4ed;
+  border-top-color: #5779d8;
+  border-radius: 50%;
+  animation: planning-loading-spin .8s linear infinite;
+}
+
+.planning-loading-error {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  max-width: 480px;
+  text-align: center;
+}
+
+@keyframes planning-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .planning-spinner { animation: none; }
+}

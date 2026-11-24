@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { dailyScrapingGoal, scrapingBucket } from './planning'
+import { agentScrapingGoal, scrapingBucket } from './planning'
 import type { scrapingProgress } from './planning'
 
 export function ScrapingDayFilter({ today, day, onChange, agents, progress, children }: {
@@ -21,7 +21,7 @@ export function ScrapingDayFilter({ today, day, onChange, agents, progress, chil
     {day && uniqueAgents.size > 0 && <ul className="reference-uses" aria-label="Progression par agent"
       style={{ display: 'flex', flexWrap: 'wrap', gap: 12, listStyle: 'none', paddingInlineStart: 0 }}>
       {[...uniqueAgents].map(([key, agent]) => <li key={key}>
-        <strong>{agent}</strong> · {progress.counts.get(key) ?? 0} / {dailyScrapingGoal} liens
+        <strong>{agent}</strong> · {progress.counts.get(key) ?? 0} / {agentScrapingGoal(progress.goals, agent)} liens
       </li>)}
     </ul>}
   </>

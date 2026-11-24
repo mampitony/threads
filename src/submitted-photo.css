@@ -1,0 +1,8 @@
+.submitted-post-content { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 340px; }
+.submitted-photo, .submitted-photo-empty { width: 72px; height: 72px; flex: 0 0 72px; border-radius: 10px; overflow: hidden; }
+.submitted-photo { padding: 0; border: 1px solid #d9e2df; background: #eef3f5; cursor: zoom-in; }
+.submitted-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.submitted-photo-empty { display: grid; place-items: center; text-align: center; padding: 5px; box-sizing: border-box; font-size: 11px; color: #60717c; background: #eef3f5; }
+.submitted-photo:focus-visible { outline: 3px solid #137f89; outline-offset: 2px; }
+.submitted-photo-full { display: block; width: 100%; max-height: 68dvh; object-fit: contain; margin-block: 12px; }
+dialog:has(.submitted-photo-full) { width: min(760px, calc(100% - 32px)); }

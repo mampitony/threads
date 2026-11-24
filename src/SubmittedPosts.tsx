@@ -1,10 +1,28 @@
+import './submitted-photo.css'
 import { ScrapingDayFilter } from './ScrapingDayFilter'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Modal } from './Modal'
-import { dailyScrapingGoal, formatDate, fromKey, scrapingDay } from './planning'
+import { agentScrapingGoal, formatDate, fromKey, scrapingDay, scrapingBucket } from './planning'
 import type { SubmittedPost, scrapingProgress } from './planning'
 import { publicationKey } from './threads'
+
+function PostPhoto({ src }: { src?: string }) {
+  const [failed, setFailed] = useState(false)
+  const [open, setOpen] = useState(false)
+  useEffect(() => { setFailed(false) }, [src])
+  if (!src || failed) return <span className="submitted-photo-empty">Photo indisponible</span>
+  return <>
+    <button type="button" className="submitted-photo" aria-label="Agrandir la photo du post"
+      aria-haspopup="dialog" onClick={() => setOpen(true)}>
+      <img src={src} alt="Photo du post Threads" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />
+    </button>
+    {open && <Modal title="Photo du post" onClose={() => setOpen(false)}>
+      <img className="submitted-photo-full" src={src} alt="Photo du post Threads" referrerPolicy="no-referrer" />
+      <button type="button" className="btn" onClick={() => setOpen(false)}>Fermer</button>
+    </Modal>}
+  </>
+}
 
 function readCopiedLinks(key: string): string[] {
   try {
@@ -145,7 +163,14 @@ export function SubmittedPosts({ today, progress, profileNames, posts, defaultAg
     }
   }
 
-  async function copy(url: string) {
+  function canCopy(post: SubmittedPost) {
+    return Boolean(defaultAgentName.trim())
+      && scrapingBucket(post.agent, '') === scrapingBucket(defaultAgentName, '')
+  }
+
+  async function copy(post: SubmittedPost) {
+    if (!canCopy(post)) return
+    const url = post.url
     setFeedback('')
     try {
       await navigator.clipboard.writeText(url)
@@ -227,8 +252,10 @@ export function SubmittedPosts({ today, progress, profileNames, posts, defaultAg
               boxShadow: post.url === highlightedUrl ? 'inset 4px 0 #b45309' : undefined,
               paddingInlineStart: post.url === highlightedUrl ? 10 : undefined,
               transition: 'background-color 350ms ease' }}>
+            <div className="submitted-post-content">
+            <PostPhoto src={post.imageUrl} />
             <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-              {number && number <= dailyScrapingGoal && <strong>{number} / {dailyScrapingGoal} · </strong>}
+              {number && <strong>{number} / {agentScrapingGoal(progress.goals, post.agent)} · </strong>}
               <a href={post.url} target="_blank" rel="noopener noreferrer">{post.url}</a>
               <p className="sub">{post.reactions === undefined ? 'Réactions non renseignées'
                 : reactionFormat.format(post.reactions) + (post.reactions > 1 ? ' réactions' : ' réaction')}</p>
@@ -244,13 +271,14 @@ export function SubmittedPosts({ today, progress, profileNames, posts, defaultAg
                 {post.publishedOn ? 'Publié le ' + formatDate(fromKey(post.publishedOn), { dateStyle: 'medium' }) : 'Date de publication inconnue'}
               </p>
             </div>
+            </div>
             <div className="account-actions">
-              {copiedLinks.has(publicationKey(post.url))
-                ? <button className="btn" type="button" onClick={() => void copy(post.url)}
+              {canCopy(post) && (copiedLinks.has(publicationKey(post.url))
+                ? <button className="btn" type="button" onClick={() => void copy(post)}
                     style={{ backgroundColor: '#dcfce7', color: '#14532d', borderColor: '#86b995' }}>
                     ✓ Déjà copié · Recopier
                   </button>
-                : <button className="btn" type="button" onClick={() => void copy(post.url)}>Copier le lien</button>}
+                : <button className="btn" type="button" onClick={() => void copy(post)}>Copier le lien</button>)}
               <button className="btn" type="button" aria-haspopup="dialog" disabled={busy} onClick={() => openForm(post)}>Modifier</button>
               <button className="btn danger" type="button" disabled={busy} onClick={() => void remove(post)}>
                 {removing === post.url ? 'Suppression…' : 'Supprimer'}

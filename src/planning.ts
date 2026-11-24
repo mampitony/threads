@@ -23,6 +23,8 @@ export type CaptionUse = {
 export type CaptionTarget = { accountId: string; modelId: string; date: string; slot: Slot }
 
 export type SubmittedPost = {
+  imageUrl?: string
+  addedBy?: string
   url: string
   agent: string
   reactions?: number
@@ -33,6 +35,7 @@ export type SubmittedPost = {
 }
 
 export type Planning = {
+  scrapingGoals?: Record<string, number>
   accounts: Account[]
   models: Model[]
   posts: Record<string, Post>
@@ -123,7 +126,11 @@ export function scrapingDay(entry: SubmittedPost) {
   return entry.quotaDay ?? entry.addedOn
 }
 
-export function scrapingProgress(entries: SubmittedPost[]) {
+export function agentScrapingGoal(goals: Record<string, number> | undefined, _agent: string) {
+  return goals?.['*'] ?? dailyScrapingGoal
+}
+
+export function scrapingProgress(entries: SubmittedPost[], goals?: Record<string, number>) {
   const counts = new Map<string, number>()
   const numbers = new Map<SubmittedPost, number>()
   const ordered = [...entries].reverse().sort((a, b) => (a.addedAt ?? '').localeCompare(b.addedAt ?? ''))
@@ -135,7 +142,7 @@ export function scrapingProgress(entries: SubmittedPost[]) {
     counts.set(key, number)
     numbers.set(entry, number)
   }
-  return { counts, numbers }
+  return { counts, numbers, goals }
 }
 
 export function scrapingBucket(agent: string, day: string) {
@@ -159,7 +166,7 @@ export function nextScrapingDay(planning: Planning, agent: string, now = new Dat
   let day = scrapingToday(now)
   if (day < firstScrapingGoalDay) return day
   const { counts } = scrapingProgress(planning.submittedPosts ?? [])
-  while ((counts.get(scrapingBucket(agent, day)) ?? 0) >= dailyScrapingGoal) {
+  while ((counts.get(scrapingBucket(agent, day)) ?? 0) >= agentScrapingGoal(planning.scrapingGoals, agent)) {
     day = dateKey(shiftDate(fromKey(day), 1))
   }
   return day

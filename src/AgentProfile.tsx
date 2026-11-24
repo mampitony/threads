@@ -1,3 +1,5 @@
+import { Modal } from './Modal'
+import './profile-photo.css'
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
@@ -38,15 +40,48 @@ export async function resizePhoto(file: File, maxSize = 320, jpegQuality = 0.8) 
 
 function ProfileImages({ profile }: { profile: Profile }) {
   return <div className="agent-profile-images">
-    {profile.cover && <img className="agent-cover" src={profile.cover} alt="Photo de couverture" />}
+    {profile.cover && <ProfileCover profile={profile} />}
     <ProfileAvatar profile={profile} />
   </div>
 }
 
+function ProfileCover({ profile }: { profile: Profile }) {
+  const [open, setOpen] = useState(false)
+  const title = 'Photo de couverture' + (profile.name ? ' de ' + profile.name : '')
+  return <>
+    <button type="button" className="agent-cover profile-photo-button"
+      aria-label={'Agrandir la ' + title.toLocaleLowerCase('fr')} aria-haspopup="dialog"
+      onClick={() => setOpen(true)}>
+      <img src={profile.cover} alt="Photo de couverture" />
+    </button>
+    {open && <Modal title={title} onClose={() => setOpen(false)}>
+      <img className="profile-photo-full" src={profile.cover} alt={title} />
+      <div className="actions">
+        <button className="btn" type="button" onClick={() => setOpen(false)}>Fermer</button>
+      </div>
+    </Modal>}
+  </>
+}
+
 function ProfileAvatar({ profile }: { profile: Pick<Profile, 'photo' | 'name'> }) {
-  return profile.photo
-    ? <img className="agent-avatar" src={profile.photo} alt="Photo de profil" />
-    : <span className="agent-avatar" aria-hidden="true">{Array.from(profile.name)[0]?.toLocaleUpperCase('fr')}</span>
+  const [open, setOpen] = useState(false)
+  if (!profile.photo) {
+    return <span className="agent-avatar" aria-hidden="true">{Array.from(profile.name)[0]?.toLocaleUpperCase('fr')}</span>
+  }
+  const title = 'Photo de profil' + (profile.name ? ' de ' + profile.name : '')
+  return <>
+    <button type="button" className="agent-avatar profile-photo-button"
+      aria-label={'Agrandir la ' + title.toLocaleLowerCase('fr')} aria-haspopup="dialog"
+      onClick={() => setOpen(true)}>
+      <img src={profile.photo} alt="Photo de profil" />
+    </button>
+    {open && <Modal title={title} onClose={() => setOpen(false)}>
+      <img className="profile-photo-full" src={profile.photo} alt={title} />
+      <div className="actions">
+        <button className="btn" type="button" onClick={() => setOpen(false)}>Fermer</button>
+      </div>
+    </Modal>}
+  </>
 }
 
 export function AgentProfilePage({ agent, onBack }: { agent: { id: string; name: string }; onBack: () => void }) {
@@ -68,7 +103,7 @@ export function AgentProfilePage({ agent, onBack }: { agent: { id: string; name:
   const name = profile?.name || agent.name
   return <section className="agent-profile-page settings" aria-labelledby="agent-profile-name">
     {profile?.cover
-      ? <img className="agent-cover" src={profile.cover} alt="Photo de couverture" />
+      ? <ProfileCover profile={profile} />
       : <div className="agent-cover-placeholder" aria-hidden="true" />}
     <div className="agent-profile-identity">
       <ProfileAvatar profile={{ name, photo: profile?.photo ?? '' }} />

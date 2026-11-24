@@ -72,6 +72,7 @@ function publicPostFields(html, code) {
   let likes = null
   let comments = null
   let publishedOn = null
+  let imageUrl = null
   for (const script of html.matchAll(/<script\b[^>]*\btype=["']application\/json["'][^>]*>([\s\S]*?)<\/script\s*>/gi)) {
     if (!script[1].includes(code)) continue
     let root
@@ -81,6 +82,7 @@ function publicPostFields(html, code) {
       const item = pending.pop()
       if (!item || typeof item !== 'object') continue
       if (item.code === code || item.shortcode === code) {
+        imageUrl ??= postImageUrl(item)
         if (Number.isSafeInteger(item.like_count) && item.like_count >= 0) likes ??= item.like_count
         if (typeof item.caption?.text === 'string') caption ??= item.caption.text.trim() || null
         if (typeof item.user?.username === 'string') author ??= item.user.username.trim() || null
@@ -90,14 +92,14 @@ function publicPostFields(html, code) {
           publishedOn ??= new Intl.DateTimeFormat('sv-SE', { timeZone: 'Indian/Antananarivo' })
             .format(new Date(item.taken_at * 1000))
         }
-        if (likes !== null && comments !== null && publishedOn !== null && caption !== null && author !== null) return { likes, comments, publishedOn, caption, author }
+        if (likes !== null && comments !== null && publishedOn !== null && caption !== null && author !== null && imageUrl !== null) return { likes, comments, publishedOn, caption, author, imageUrl }
       }
       for (const value of Object.values(item)) {
         if (value && typeof value === 'object') pending.push(value)
       }
     }
   }
-  return { likes, comments, publishedOn, caption, author }
+  return { likes, comments, publishedOn, caption, author, imageUrl }
 }
 
 async function readPublicPost(post, fetcher) {

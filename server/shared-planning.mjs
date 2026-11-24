@@ -39,6 +39,11 @@ function validSubmittedPosts(posts) {
 
 function validPlanning(data) {
   return object(data)
+    && (data.scrapingGoals === undefined || (object(data.scrapingGoals)
+      && Object.keys(data.scrapingGoals).length <= 1000
+      && Object.entries(data.scrapingGoals).every(([agent, goal]) =>
+        (agent === '*' || (agent.startsWith('|') && agent.length <= 151 && agent.length > 1))
+        && Number.isSafeInteger(goal) && goal >= 1 && goal <= 10000)))
     && (data.submittedPosts === undefined || validSubmittedPosts(data.submittedPosts))
     && Array.isArray(data.accounts) && data.accounts.every(item =>
       object(item) && text(item.id) && text(item.name) && text(item.handle)
@@ -63,10 +68,16 @@ export async function readSharedPlanning(db) {
     ?? { revision: 0, data: null }
 }
 
-export async function writeSharedPlanning(db, body) {
+export async function writeSharedPlanning(db, body, isAdmin = false) {
   const { revision, data } = body ?? {}
   if (!count(revision) || revision >= 2147483647 || !validPlanning(data)) {
     return [400, { error: 'Données de planning invalides ou trop volumineuses.' }]
+  }
+  const previous = await readSharedPlanning(db)
+  const previousData = typeof previous.data === 'string' ? JSON.parse(previous.data) : previous.data
+  const canonicalGoals = goals => JSON.stringify(Object.entries(goals ?? {}).sort(([a], [b]) => a.localeCompare(b)))
+  if (!isAdmin && canonicalGoals(previousData?.scrapingGoals) !== canonicalGoals(data.scrapingGoals)) {
+    return [403, { error: 'Seul un administrateur peut modifier les objectifs des agents.' }]
   }
   const serialized = JSON.stringify(data)
   const saved = revision === 0

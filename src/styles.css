@@ -1290,3 +1290,172 @@ dialog {
     gap: 6px;
   }
 }
+
+/* Couleurs du panneau et de sa navigation. */
+.layout,
+.layout > main {
+  background: #f2f6fa;
+}
+
+.layout > aside {
+  background: #142c42;
+  border-right-color: #203e56;
+  color: #f2f6fa;
+  scrollbar-color: #687078 #142c42;
+}
+
+.layout > aside .brand-icon {
+  background: #137f89;
+}
+
+.layout > aside nav button {
+  border-radius: 3px;
+  color: #e0eaf2;
+  transition: background-color .15s, color .15s;
+}
+
+.layout > aside nav button:hover {
+  background: #203e56;
+  color: #8ce8e0;
+}
+
+.layout > aside nav button[aria-current='page'] {
+  background: #137f89;
+  color: #fff;
+}
+
+.layout > aside nav button:focus-visible {
+  outline: 2px solid #8ce8e0;
+  outline-offset: 2px;
+}
+
+.layout > aside .nav-label,
+.layout > aside .aside-foot {
+  color: #b9cad8;
+}
+
+.layout > aside .account-session .btn {
+  background: #203e56;
+  border-color: #557187;
+  color: #fff;
+}
+
+.layout > aside .account-session .btn:hover {
+  background: #137f89;
+  border-color: #137f89;
+}
+
+.layout > aside .account-session .btn:focus-visible {
+  outline-color: #8ce8e0;
+}
+
+.layout > .app-banner {
+  background: #142c42;
+  border-bottom-color: #203e56;
+  color: #f2f6fa;
+}
+
+.layout > .app-banner .banner-profile,
+.layout > .app-banner .banner-agent-name,
+.layout > .app-banner .banner-title {
+  color: #f2f6fa;
+}
+
+.layout > .app-banner .mobile-menu-toggle {
+  background: #203e56;
+  border-color: #557187;
+  color: #fff;
+}
+
+.layout > .app-banner button:focus-visible {
+  outline-color: #8ce8e0;
+}
+
+/* Relief des cartes du planning */
+.accounts {
+  gap: 18px;
+  perspective: 1400px;
+  padding-block: 6px 18px;
+}
+
+.accounts > .account {
+  position: relative;
+  box-shadow:
+    inset 1px 0 0 #ffffffcc,
+    0 2px 0 hsl(var(--account-hue) 28% 79%),
+    0 5px 0 hsl(var(--account-hue) 24% 87%),
+    0 12px 20px -8px #142f4540;
+}
+
+.accounts .account-head {
+  background: linear-gradient(135deg,
+    hsl(var(--account-hue) 65% 98%),
+    hsl(var(--account-hue) 52% 90%));
+  box-shadow: inset 0 1px 0 #ffffffdd;
+}
+
+.accounts .avatar {
+  background: linear-gradient(145deg,
+    hsl(var(--account-hue) 62% 92%),
+    hsl(var(--account-hue) 50% 77%));
+  box-shadow: inset 0 1px 1px #ffffffdd,
+    0 3px 5px hsl(var(--account-hue) 30% 30% / 18%);
+}
+
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  .accounts > .account:hover {
+    transform: translateY(-5px) rotateX(1deg);
+    box-shadow:
+      inset 1px 0 0 #ffffffcc,
+      0 2px 0 hsl(var(--account-hue) 28% 76%),
+      0 5px 0 hsl(var(--account-hue) 24% 85%),
+      0 20px 28px -10px #142f4552;
+  }
+}
+
+.accounts > .account:focus-within {
+  outline: 2px solid #137f89;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accounts > .account {
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Cartes compactes avec contenu défilant */
+.accounts {
+  align-items: start;
+}
+
+.accounts > .account {
+  display: flex;
+  flex-direction: column;
+  max-height: 430px;
+}
+
+.accounts .account-head {
+  flex: none;
+  padding: 11px 13px;
+}
+
+.accounts .slots {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #93a8b5 transparent;
+  padding: 4px 12px;
+}
+
+.accounts .slots:focus-visible {
+  outline: 2px solid #137f89;
+  outline-offset: -2px;
+}
+
+.accounts .slot {
+  padding-block: 8px;
+  gap: 3px;
+}
