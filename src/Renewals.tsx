@@ -12,22 +12,26 @@ export function Renewals({ data, onSave, onRemove }: {
   const [open, setOpen] = useState(false)
   const [accountId, setAccountId] = useState('')
   const [date, setDate] = useState(todayKey())
+  const [time, setTime] = useState('')
+  const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const accounts = [...data.accounts].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }))
-  const entries = [...(data.renewals ?? [])].sort((a, b) => a.date.localeCompare(b.date))
+  const entries = [...(data.renewals ?? [])].sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? '').localeCompare(b.time ?? ''))
   function edit(entry?: Renewal) {
     setEditing(entry ?? null)
     setAccountId(entry?.accountId ?? accounts[0]?.id ?? '')
     setDate(entry?.date ?? todayKey())
+    setTime(entry?.time ?? '')
+    setNote(entry?.note ?? '')
     setError('')
     setMessage('')
     setOpen(true)
   }
   return <>
     <header className="top">
-      <div><h1>Renouvellement de compte</h1><p className="sub">Le compte concerné et sa date de renouvellement.</p></div>
+      <div><h1>Renouvellement de compte</h1><p className="sub">Le compte concerné, la date, l’heure et les remarques.</p></div>
       <button className="btn primary" type="button" disabled={busy || !accounts.length} onClick={() => edit()}>Ajouter un renouvellement</button>
     </header>
     <p role="status" className="sub">{message}</p>
@@ -40,7 +44,8 @@ export function Renewals({ data, onSave, onRemove }: {
           return <li key={entry.id} style={{ flexWrap: 'wrap', gap: 12 }}>
             <div><strong>{account?.name ?? entry.accountName}</strong>
               {model && <p className="sub">{model.name}</p>}
-              <p className="sub">Date de renouvellement : <time dateTime={entry.date}>{formatDate(fromKey(entry.date), { dateStyle: 'long' })}</time></p>
+              <p className="sub">Date de renouvellement : <time dateTime={entry.date}>{formatDate(fromKey(entry.date), { dateStyle: 'long' })}</time>{entry.time && <> à <time>{entry.time}</time></>}</p>
+              {entry.note && <p className="sub" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{entry.note}</p>}
             </div>
             <div className="account-actions">
               <button className="btn" type="button" disabled={busy} onClick={() => edit(entry)}>Modifier</button>
@@ -61,7 +66,7 @@ export function Renewals({ data, onSave, onRemove }: {
         event.preventDefault()
         if (busy) return
         const account = data.accounts.find(item => item.id === accountId)
-        if ((!account && accountId !== editing?.accountId) || !isDateKey(date)) {
+        if ((!account && accountId !== editing?.accountId) || !isDateKey(date) || (time !== '' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) || note.length > 2000) {
           setError('Choisis un compte et une date valides.')
           return
         }
@@ -69,7 +74,7 @@ export function Renewals({ data, onSave, onRemove }: {
         setError('')
         try {
           const entry = { id: editing?.id ?? crypto.randomUUID(), accountId,
-            accountName: account?.name ?? editing!.accountName, date }
+            accountName: account?.name ?? editing!.accountName, date, time: time || undefined, note: note.trim() || undefined }
           if (await onSave(entry, editing ?? undefined)) {
             setOpen(false)
             setMessage('Renouvellement enregistré.')
@@ -84,6 +89,9 @@ export function Renewals({ data, onSave, onRemove }: {
           </option>)}
         </select></label>
         <label>Date de renouvellement<input type="date" required value={date} disabled={busy} onChange={event => setDate(event.target.value)} /></label>
+        <label>Heure de renouvellement (facultatif)<input type="time" step="60" value={time} disabled={busy} onChange={event => setTime(event.target.value)} /></label>
+        <label>Remarques (facultatif)<textarea rows={3} maxLength={2000} value={note} disabled={busy}
+          placeholder="Écrire une remarque…" onChange={event => setNote(event.target.value)} /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="actions">
           <button className="btn" type="button" disabled={busy} onClick={() => setOpen(false)}>Annuler</button>

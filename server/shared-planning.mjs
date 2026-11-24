@@ -44,7 +44,9 @@ function validPlanning(data) {
       && data.renewals.every(item => object(item) && text(item.id) && item.id.length > 0 && item.id.length <= 100
         && text(item.accountId) && item.accountId.length > 0 && item.accountId.length <= 150
         && text(item.accountName) && item.accountName.trim().length > 0 && item.accountName.length <= 150
-        && text(item.date) && optionalDate(item.date))))
+        && text(item.date) && optionalDate(item.date)
+        && (item.time === undefined || (text(item.time) && /^([01]\d|2[0-3]):[0-5]\d$/.test(item.time)))
+        && (item.note === undefined || (text(item.note) && item.note.length <= 2000)))))
     && (data.scrapingGoals === undefined || (object(data.scrapingGoals)
       && Object.keys(data.scrapingGoals).length <= 1000
       && Object.entries(data.scrapingGoals).every(([agent, goal]) =>
