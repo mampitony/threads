@@ -1,3 +1,4 @@
+import './renewal-alerts.css'
 import { publicationRule } from './publicationRules'
 import { accountRenewalAge } from './renewalAge'
 import { Renewals } from './Renewals'
@@ -88,7 +89,9 @@ function AccountCard({ account, date, posts, renewalAge, rule, onEdit }: {
   const initials = account.name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase()
   const accountHue = Array.from(account.id).reduce((hash, char) => Math.imul(hash, 31) + char.charCodeAt(0) | 0, 0)
   const hue = (Math.imul(accountHue, 137) >>> 0) % 360
-  return <article className="account" style={{ '--account-hue': hue } as CSSProperties}>
+  const stage = !rule.message ? undefined : rule.blocked ? 'attention' : renewalAge !== null && renewalAge < 3 ? 'progress' : 'routine'
+  const stageLabel = stage === 'attention' ? '⚠ Activités de préparation' : stage === 'progress' ? '◷ Activités progressives' : '✓ Routine à suivre'
+  return <article className="account" data-renewal-stage={stage} style={{ '--account-hue': hue } as CSSProperties}>
     <header className="account-head">
       <span className="avatar" aria-hidden="true">{initials}</span>
       <div><h3>{account.name}</h3><p className="handle">@{account.handle}</p>
@@ -98,7 +101,10 @@ function AccountCard({ account, date, posts, renewalAge, rule, onEdit }: {
         </p>}
       </div>
     </header>
-    {rule.message && <p role="status" style={{ fontSize: 11, padding: '8px 12px', background: rule.blocked ? '#fff4dc' : '#e8f4ed', margin: 0 }}>{rule.message}</p>}
+    {rule.message && <div className="renewal-activity-note">
+      <strong>{stageLabel}</strong>
+      <p>{rule.message}</p>
+    </div>}
     <div className="slots" tabIndex={0} role="region" aria-label={'Créneaux de ' + account.name}>
       {slots.map(slot => {
         const post = posts[postKey(date, account, slot)]
@@ -1134,6 +1140,12 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           </div>
           {counterStatus && <p className="sub" role="status">{counterStatus}</p>}
           {accounts.length === 0 && <p className="empty">Aucun compte pour ce modèle.</p>}
+          <aside className="renewal-alert-summary" role="status" aria-label="Rappels des comptes renouvelés">
+            <strong>Activités des comptes renouvelés</strong>
+            <p>Rouge : préparation ou informations à compléter · Orange : J1–J2 · Bleu : suivi à partir de J3.</p>
+            <p>{accounts.filter(account => publicationRule(data.renewals ?? [], account.id, now).blocked).length} compte(s) affiché(s) en attente avant la saisie de publications.</p>
+            <span>Les couleurs indiquent les consignes liées à l’âge. Elles ne confirment pas que les activités ont été effectuées.</span>
+          </aside>
           <div className="accounts">
             {accounts.map(account => <AccountCard key={account.id} account={account} date={selected} posts={data.posts}
               renewalAge={accountRenewalAge(data.renewals ?? [], account.id, now)}
