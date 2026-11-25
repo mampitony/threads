@@ -87,6 +87,21 @@ export async function writeSharedPlanning(db, body, isAdmin = false) {
   if (!isAdmin && canonicalGoals(previousData?.scrapingGoals) !== canonicalGoals(data.scrapingGoals)) {
     return [403, { error: 'Seul un administrateur peut modifier les objectifs des agents.' }]
   }
+  // Refuser uniquement les nouvelles légendes ou leur remplacement, sans bloquer les anciennes données.
+  for (const [key, post] of Object.entries(data.posts)) {
+    if (!post.caption || post.caption === previousData?.posts?.[key]?.caption) continue
+    const accountId = key.split('|')[1]
+    const entries = [...(previousData?.renewals ?? []), ...(data.renewals ?? [])]
+      .filter(entry => entry.accountId === accountId)
+      .sort((a, b) => b.date.localeCompare(a.date) || (b.time ?? '').localeCompare(a.time ?? ''))
+    const latest = entries[0]
+    if (!latest) continue
+    const start = latest.time && /^([01]\d|2[0-3]):[0-5]\d$/.test(latest.time)
+      ? Date.parse(latest.date + 'T' + latest.time + ':00+03:00') : NaN
+    if (!Number.isFinite(start) || Date.now() - start < 86400000) {
+      return [403, { error: 'Publication bloquée : ce compte doit atteindre 24 heures depuis son renouvellement. Vérifie sa date et son heure.' }]
+    }
+  }
   const serialized = JSON.stringify(data)
   const saved = revision === 0
     ? await db.get('INSERT INTO shared_planning (id, revision, data) VALUES (1, 1, ?) ON CONFLICT (id) DO NOTHING RETURNING revision, data', serialized)

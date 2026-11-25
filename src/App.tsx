@@ -1,3 +1,4 @@
+import { publicationRule } from './publicationRules'
 import { accountRenewalAge } from './renewalAge'
 import { Renewals } from './Renewals'
 import { ScrapingGoals } from './ScrapingGoals'
@@ -76,10 +77,11 @@ function WeekPicker({ selected, onSelect }: { selected: string; onSelect: (day: 
   </section>
 }
 
-function AccountCard({ account, date, posts, renewalAge, onEdit }: {
+function AccountCard({ account, date, posts, renewalAge, rule, onEdit }: {
   account: Account
   date: string
   posts: Planning['posts']
+  rule: ReturnType<typeof publicationRule>
   renewalAge: number | null
   onEdit: (slot: Slot) => void
 }) {
@@ -96,6 +98,7 @@ function AccountCard({ account, date, posts, renewalAge, onEdit }: {
         </p>}
       </div>
     </header>
+    {rule.message && <p role="status" style={{ fontSize: 11, padding: '8px 12px', background: rule.blocked ? '#fff4dc' : '#e8f4ed', margin: 0 }}>{rule.message}</p>}
     <div className="slots" tabIndex={0} role="region" aria-label={'Créneaux de ' + account.name}>
       {slots.map(slot => {
         const post = posts[postKey(date, account, slot)]
@@ -108,7 +111,7 @@ function AccountCard({ account, date, posts, renewalAge, onEdit }: {
         return <div key={slot} className="slot">
           <div className="slot-top">
             <span className="slot-name"><Icon name={slot} />{slot}</span>
-            <button className="edit" aria-label={action + ' le créneau ' + slot + ' de ' + account.name}
+            <button className="edit" disabled={rule.blocked} title={rule.blocked ? rule.message : undefined} aria-label={action + ' le créneau ' + slot + ' de ' + account.name}
               onClick={() => onEdit(slot)}>{post ? action : '+ Saisir'}</button>
           </div>
           {post ? <>
@@ -627,6 +630,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   }
 
   async function savePost(target: Extract<Editor, { type: 'post' }>, post: Post) {
+    const rule = publicationRule(data.renewals ?? [], target.account.id, new Date())
+    if (rule.blocked) return rule.message
     const key = postKey(target.date, target.account, target.slot)
     if ((post.likes == null || post.comments == null) && threadsLink(post.url)
       && publicationKey(post.url).startsWith('threads:')) {
@@ -665,6 +670,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         conflict = 'Ce compte est indisponible ou a déjà utilisé cette légende.'
         return null
       }
+      const rule = publicationRule(current.renewals ?? [], account.id, new Date())
+      if (rule.blocked) { conflict = rule.message; return null }
       const key = postKey(date, account, slot)
       const post = current.posts[key]
       if (!freeCaptionSlot(post)) {
@@ -915,6 +922,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         return null
       }
 
+      const rule = publicationRule(current.renewals ?? [], account.id, new Date())
+      if (rule.blocked) { conflict = rule.message; return null }
       const key = postKey(target.date, account, target.slot)
       const post = current.posts[key] ?? emptyPost
       if (post.caption && post.caption !== source.caption) {
@@ -1128,6 +1137,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           <div className="accounts">
             {accounts.map(account => <AccountCard key={account.id} account={account} date={selected} posts={data.posts}
               renewalAge={accountRenewalAge(data.renewals ?? [], account.id, now)}
+              rule={publicationRule(data.renewals ?? [], account.id, now)}
               onEdit={slot => setEditor({ type: 'post', account, slot, date: selected })} />)}
           </div>
         </section>
