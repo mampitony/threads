@@ -104,6 +104,13 @@ export function Renewals({ data, onSave, onRemove }: {
         </select></label>
         <label>Date de renouvellement<input type="date" required value={date} disabled={busy} onChange={event => setDate(event.target.value)} /></label>
         <label>Heure de renouvellement (Madagascar)<input required type="time" step="60" value={time} disabled={busy} onChange={event => setTime(event.target.value)} /></label>
+        <button className="btn" type="button" disabled={busy} onClick={() => {
+          setDate(todayKey())
+          setNow(new Date())
+          setError('')
+        }}>Repartir aujourd’hui à cette heure</button>
+        <p className="sub">Pour un nouveau renouvellement aujourd’hui, choisis l’heure puis clique sur ce bouton et enregistre.</p>
+        <p className="sub" role="status">Départ : {isDateKey(date) ? formatDate(fromKey(date), { dateStyle: 'long' }) : 'date à renseigner'}{time ? ' à ' + time : ''} (Madagascar). {renewalAgeLabel({ date, time }, now)}</p>
         <label>Remarques (facultatif)<textarea rows={3} maxLength={2000} value={note} disabled={busy}
           placeholder="Écrire une remarque…" onChange={event => setNote(event.target.value)} /></label>
         {error && <p className="form-error" role="alert">{error}</p>}
