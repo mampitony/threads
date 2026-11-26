@@ -530,7 +530,6 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   const [counterBusy, setCounterBusy] = useState(false)
 
   function applySnapshot(snapshot: PlanningSnapshot) {
-    if (snapshot.unchanged) { setSyncError(''); return }
     if (snapshot.revision < latestRevision.current) return
     setSyncError('')
     if (snapshot.revision === latestRevision.current) return
@@ -555,7 +554,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     async function refresh() {
       if (document.hidden) return
       try {
-        const snapshot = await sharedPlanningRequest(undefined, controller.signal, latestRevision.current)
+        const snapshot = await sharedPlanningRequest(undefined, controller.signal)
         if (snapshot && !controller.signal.aborted) applySnapshot(snapshot)
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -564,7 +563,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       }
     }
     void refresh()
-    const interval = window.setInterval(refresh, 10_000)
+    const interval = window.setInterval(refresh, 60_000)
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)
     return () => {
