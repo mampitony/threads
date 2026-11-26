@@ -1,6 +1,6 @@
 import './renewal-alerts.css'
 import { publicationRule } from './publicationRules'
-import { accountRenewalAge } from './renewalAge'
+import { activityEntries, accountRenewalAge } from './renewalAge'
 import { Renewals } from './Renewals'
 import { ScrapingGoals } from './ScrapingGoals'
 import './loading.css'
@@ -97,7 +97,7 @@ function AccountCard({ account, date, posts, renewalAge, rule, onEdit }: {
       <div><h3>{account.name}</h3><p className="handle">@{account.handle}</p>
         {renewalAge !== null && <p style={{ marginBlockStart: 5, fontSize: 11, fontWeight: 700,
           padding: '3px 6px', borderRadius: 6, background: '#e1f2e9', color: '#205947' }}>
-          Âge : {renewalAge} {renewalAge === 1 ? 'jour' : 'jours'} depuis renouvellement
+          Âge : {renewalAge} {renewalAge === 1 ? 'jour' : 'jours'} d’activité
         </p>}
       </div>
     </header>
@@ -238,7 +238,7 @@ function AccountEditor({ account, models, modelId, onClose, onSave }: {
   onClose: () => void
   models: Model[]
   modelId?: string
-  onSave: (name: string, handle: string, modelId: string) => Promise<string>
+  onSave: (name: string, handle: string, modelId: string, createdAt?: string) => Promise<string>
 }) {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -262,7 +262,9 @@ function AccountEditor({ account, models, modelId, onClose, onSave }: {
     }
     const modelInput = form.elements.namedItem('modelId') as HTMLSelectElement
     setSaving(true)
-    setError(await onSave(name, handle, modelInput.value))
+    const creationInput = form.elements.namedItem('createdAt') as HTMLInputElement
+    const instant = creationInput.value ? new Date(creationInput.value + ':00+03:00') : null
+    setError(await onSave(name, handle, modelInput.value, instant?.toISOString()))
     setSaving(false)
   }
 
@@ -272,6 +274,10 @@ function AccountEditor({ account, models, modelId, onClose, onSave }: {
         onInput={event => event.currentTarget.setCustomValidity('')} /></label>
       <label>Identifiant du profil<input name="handle" required maxLength={100} placeholder="Ex. nom.du.profil" defaultValue={account?.handle}
         onInput={event => event.currentTarget.setCustomValidity('')} /></label>
+      <label>Date et heure de création (Madagascar)<input name="createdAt" type="datetime-local"
+        required={!account} step="60" defaultValue={account?.createdAt
+          ? new Date(Date.parse(account.createdAt) + 3 * 3600000).toISOString().slice(0, 16) : ''} /></label>
+      <p className="sub">Saisis la création réelle du compte Threads. Son âge se calcule par périodes de 24 heures. Un renouvellement devient le nouveau départ des activités.</p>
       <label>Modèle<select name="modelId" defaultValue={account?.modelId ?? modelId ?? ''}>
         <option value="">Sans modèle</option>
         {models.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
@@ -552,6 +558,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
 
     const controller = new AbortController()
     async function refresh() {
+      if (document.hidden) return
       try {
         const snapshot = await sharedPlanningRequest(undefined, controller.signal)
         if (snapshot && !controller.signal.aborted) applySnapshot(snapshot)
@@ -562,12 +569,14 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       }
     }
     void refresh()
-    const interval = window.setInterval(refresh, 5000)
+    const interval = window.setInterval(refresh, 60_000)
     window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
     return () => {
       controller.abort()
       window.clearInterval(interval)
       window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
       clearTimeout(timer.current)
     }
   }, [shared, storageKey])
@@ -636,7 +645,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
   }
 
   async function savePost(target: Extract<Editor, { type: 'post' }>, post: Post) {
-    const rule = publicationRule(data.renewals ?? [], target.account.id, new Date())
+    const rule = publicationRule(activityEntries(data.accounts, data.renewals ?? []), target.account.id, new Date())
     if (rule.blocked) return rule.message
     const key = postKey(target.date, target.account, target.slot)
     if ((post.likes == null || post.comments == null) && threadsLink(post.url)
@@ -676,7 +685,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         conflict = 'Ce compte est indisponible ou a déjà utilisé cette légende.'
         return null
       }
-      const rule = publicationRule(current.renewals ?? [], account.id, new Date())
+      const rule = publicationRule(activityEntries(current.accounts, current.renewals ?? []), account.id, new Date())
       if (rule.blocked) { conflict = rule.message; return null }
       const key = postKey(date, account, slot)
       const post = current.posts[key]
@@ -692,7 +701,8 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
     return ''
   }
 
-  async function saveAccount(previous: Account | undefined, name: string, handle: string, modelId: string) {
+  async function saveAccount(previous: Account | undefined, name: string, handle: string, modelId: string, createdAt?: string) {
+    if (createdAt && !Number.isFinite(Date.parse(createdAt))) return 'Date de création invalide.'
     let conflict = 'Cet identifiant est déjà utilisé.'
     const result = await commit(current => {
       if (previous && !current.accounts.some(account => account.id === previous.id)) {
@@ -706,7 +716,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         conflict = 'Ce modèle n’est plus disponible. Choisis un autre modèle.'
         return null
       }
-      const account = { id: previous?.id ?? crypto.randomUUID(), name, handle, modelId: modelId || undefined }
+      const account = { id: previous?.id ?? crypto.randomUUID(), name, handle, modelId: modelId || undefined, createdAt }
       const accounts = previous
         ? current.accounts.map(item => item.id === account.id ? account : item)
         : [...current.accounts, account]
@@ -928,7 +938,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
         return null
       }
 
-      const rule = publicationRule(current.renewals ?? [], account.id, new Date())
+      const rule = publicationRule(activityEntries(current.accounts, current.renewals ?? []), account.id, new Date())
       if (rule.blocked) { conflict = rule.message; return null }
       const key = postKey(target.date, account, target.slot)
       const post = current.posts[key] ?? emptyPost
@@ -1143,13 +1153,13 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
           <aside className="renewal-alert-summary" role="status" aria-label="Rappels des comptes renouvelés">
             <strong>Activités des comptes renouvelés</strong>
             <p>Rouge : préparation ou informations à compléter · Orange : J1–J2 · Bleu : suivi à partir de J3.</p>
-            <p>{accounts.filter(account => publicationRule(data.renewals ?? [], account.id, now).blocked).length} compte(s) affiché(s) en attente avant la saisie de publications.</p>
+            <p>{accounts.filter(account => publicationRule(activityEntries(data.accounts, data.renewals ?? []), account.id, now).blocked).length} compte(s) affiché(s) en attente avant la saisie de publications.</p>
             <span>Les couleurs indiquent les consignes liées à l’âge. Elles ne confirment pas que les activités ont été effectuées.</span>
           </aside>
           <div className="accounts">
             {accounts.map(account => <AccountCard key={account.id} account={account} date={selected} posts={data.posts}
-              renewalAge={accountRenewalAge(data.renewals ?? [], account.id, now)}
-              rule={publicationRule(data.renewals ?? [], account.id, now)}
+              renewalAge={accountRenewalAge(activityEntries(data.accounts, data.renewals ?? []), account.id, now)}
+              rule={publicationRule(activityEntries(data.accounts, data.renewals ?? []), account.id, now)}
               onEdit={slot => setEditor({ type: 'post', account, slot, date: selected })} />)}
           </div>
         </section>
@@ -1243,7 +1253,7 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       defaultAgentName={defaultAgentName}
       onClose={() => setEditor(null)} onSave={post => savePost(editor, post)} />}
     {editor?.type === 'account' && <AccountEditor account={editor.account} models={data.models} modelId={editor.modelId}
-      onClose={() => setEditor(null)} onSave={(name, handle, modelId) => saveAccount(editor.account, name, handle, modelId)} />}
+      onClose={() => setEditor(null)} onSave={(name, handle, modelId, createdAt) => saveAccount(editor.account, name, handle, modelId, createdAt)} />}
     {editor?.type === 'model' && <ModelEditor model={editor.model}
       onClose={() => setEditor(null)} onSave={name => saveModel(name, editor.model)} />}
     {editor?.type === 'deleteAccount' && <DeletePlanningItem key={editor.account.id}
