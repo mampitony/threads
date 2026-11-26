@@ -2,6 +2,7 @@ import { createPasswordReset } from './password-reset.mjs'
 import { readSharedPlanning, writeSharedPlanning } from './shared-planning.mjs'
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto'
 import { promisify } from 'node:util'
+import { gzipSync } from 'node:zlib'
 
 const derive = promisify(scrypt)
 const saltSize = 16
@@ -19,19 +20,28 @@ function json(res, status, body) {
   const req = res.req
   const path = (req?.url ?? '/').split('?')[0]
 
+  const raw = Buffer.from(payload ?? '', 'utf8')
+  const acceptsGzip = /\bgzip\b/.test(String(req?.headers?.['accept-encoding'] ?? ''))
+  const compress = acceptsGzip && raw.length > 1024
+  const out = compress ? gzipSync(raw, { level: 9 }) : raw
+
   console.info('[api-size]', {
     method: req?.method,
     path,
     status,
-    bytes: Buffer.byteLength(payload ?? '', 'utf8'),
+    bytes: raw.length,
+    sent: out.length,
   })
 
-  res.writeHead(status, {
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-  })
+    'Vary': 'Accept-Encoding',
+  }
+  if (compress) headers['Content-Encoding'] = 'gzip'
+  res.writeHead(status, headers)
 
-  res.end(payload)
+  res.end(out)
 }
 
 function sessionToken(req) {
