@@ -55,6 +55,7 @@ function validPlanning(data) {
     && (data.submittedPosts === undefined || validSubmittedPosts(data.submittedPosts))
     && Array.isArray(data.accounts) && data.accounts.every(item =>
       object(item) && text(item.id) && text(item.name) && text(item.handle)
+      && optionalTimestamp(item.createdAt)
       && (item.modelId === undefined || text(item.modelId)))
     && Array.isArray(data.models) && data.models.every(item => object(item) && text(item.id) && text(item.name))
     && object(data.posts) && Object.values(data.posts).every(item =>
@@ -94,6 +95,15 @@ export async function writeSharedPlanning(db, body, isAdmin = false) {
     const entries = [...(previousData?.renewals ?? []), ...(data.renewals ?? [])]
       .filter(entry => entry.accountId === accountId)
       .sort((a, b) => b.date.localeCompare(a.date) || (b.time ?? '').localeCompare(a.time ?? ''))
+    if (!entries.length) {
+      const account = data.accounts.find(item => item.id === accountId)
+      const previousAccount = previousData?.accounts?.find(item => item.id === accountId)
+      const createdAt = account?.createdAt ?? previousAccount?.createdAt
+      if (createdAt) {
+        const local = new Date(Date.parse(createdAt) + 3 * 3600000).toISOString()
+        entries.push({ date: local.slice(0, 10), time: local.slice(11, 16) })
+      }
+    }
     const latest = entries[0]
     if (!latest) continue
     const start = latest.time && /^([01]\d|2[0-3]):[0-5]\d$/.test(latest.time)

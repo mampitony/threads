@@ -1,5 +1,5 @@
 import { isDateKey } from './planning'
-import type { Renewal } from './planning'
+import type { Account, Renewal } from './planning'
 
 export function renewalInstant(entry: Pick<Renewal, 'date' | 'time'>) {
   if (!isDateKey(entry.date) || !entry.time || !/^([01]\d|2[0-3]):[0-5]\d$/.test(entry.time)) return null
@@ -25,4 +25,17 @@ export function accountRenewalAge(entries: Renewal[], accountId: string, now: Da
   if (!latest) return null
   const start = renewalInstant(latest)
   return start === null ? null : Math.floor((now.getTime() - start) / 86400000)
+}
+
+export function activityEntries(accounts: Account[], renewals: Renewal[]) {
+  const entries = [...renewals]
+  for (const account of accounts) {
+    if (!account.createdAt || entries.some(entry => entry.accountId === account.id)) continue
+    const timestamp = Date.parse(account.createdAt)
+    if (!Number.isFinite(timestamp)) continue
+    const local = new Date(timestamp + 3 * 3600000).toISOString()
+    entries.push({ id: 'creation-' + account.id, accountId: account.id, accountName: account.name,
+      date: local.slice(0, 10), time: local.slice(11, 16) })
+  }
+  return entries
 }

@@ -1,6 +1,6 @@
 export const slots = ['Matin', 'Midi', 'Soir'] as const
 export type Slot = typeof slots[number]
-export type Account = { id: string; name: string; handle: string; modelId?: string }
+export type Account = { id: string; name: string; handle: string; modelId?: string; createdAt?: string }
 export type Model = { id: string; name: string }
 export type Post = { count: string; caption: string; url: string; owner: string; likes?: number; comments?: number; imageUrl?: string; author?: string }
 export type TylanReference = {
