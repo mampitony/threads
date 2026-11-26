@@ -109,7 +109,16 @@ export function createAuthMiddleware(db, { secureOnly = false, bootstrapEmail = 
       if (!session) return json(res, 401, { error: 'Connecte-toi pour accéder au panneau.' })
       if (!trustedRequest) return json(res, 403, { error: 'Requête non autorisée.' })
       try {
-        if (req.method === 'GET') return json(res, 200, await readSharedPlanning(db))
+        if (req.method === 'GET') {
+          const since = searchParams.get('since')
+          if (since !== null) {
+            const current = await db.get('SELECT revision FROM shared_planning WHERE id = 1')
+            if (current && Number(since) === current.revision) {
+              return json(res, 200, { revision: current.revision, unchanged: true })
+            }
+          }
+          return json(res, 200, await readSharedPlanning(db))
+        }
         if (req.method !== 'PUT') return json(res, 405, { error: 'Méthode non autorisée.' })
         if (req.headers['content-type']?.split(';')[0] !== 'application/json') {
           return json(res, 400, { error: 'Format du planning invalide.' })
