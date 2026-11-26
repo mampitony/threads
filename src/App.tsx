@@ -1,3 +1,4 @@
+import './sidebar-submenus.css'
 import './renewal-alerts.css'
 import { publicationRule } from './publicationRules'
 import { activityEntries, accountRenewalAge } from './renewalAge'
@@ -1087,18 +1088,31 @@ export function App({ storageKey, email, isAdmin, shared, onLogout }: {
       }
     }}>
       <div className="brand"><span className="brand-icon"><Icon name="calendar" /></span>Plan de posts</div>
-      <nav aria-label="Navigation principale">
-        <button aria-current={page === 'renewals' ? 'page' : undefined} onClick={() => setPage('renewals')}><Icon name="calendar" />Renouvellement de compte</button>
-        <button aria-current={page === 'dashboard' ? 'page' : undefined} onClick={() => setPage('dashboard')}><Icon name="stats" />Tableau de bord</button>
-        <button aria-current={page === 'performance' ? 'page' : undefined} onClick={() => setPage('performance')}><Icon name="stats" />Performance des comptes</button>
-        <button aria-current={page === 'planning' ? 'page' : undefined} onClick={() => setPage('planning')}><Icon name="calendar" />Planning</button>
-        <button aria-current={page === 'accounts' ? 'page' : undefined} onClick={() => setPage('accounts')}><Icon name="people" />Comptes</button>
-        <button aria-current={page === 'tylan' ? 'page' : undefined} onClick={() => setPage('tylan')}><Icon name="references" />Scrapping Tylan</button>
-        <button aria-current={page === 'submissions' ? 'page' : undefined} onClick={() => setPage('submissions')}><Icon name="references" />Liens à transmettre</button>
-        <button aria-current={page === 'presence' ? 'page' : undefined}
-          onClick={() => setPage('presence')}><Icon name="people" />Statut des agents</button>
-        {isAdmin && <button aria-current={page === 'approvals' ? 'page' : undefined}
-          onClick={() => setPage('approvals')}><Icon name="people" />Gestion des accès</button>}
+      <nav className="workspace-navigation" aria-label="Navigation principale">
+        <button type="button" aria-current={page === 'dashboard' ? 'page' : undefined} onClick={() => setPage('dashboard')}><Icon name="stats" />Tableau de bord</button>
+        <details className="navigation-group" open={['planning', 'tylan', 'submissions'].includes(page)}>
+          <summary><Icon name="calendar" /><span>Tâches par jour</span></summary>
+          <div className="navigation-submenu">
+            <button type="button" aria-current={page === 'planning' ? 'page' : undefined} onClick={() => setPage('planning')}><Icon name="calendar" />Planning</button>
+            <button type="button" aria-current={page === 'tylan' ? 'page' : undefined} onClick={() => setPage('tylan')}><Icon name="references" />Scrapping Tylan</button>
+            <button type="button" aria-current={page === 'submissions' ? 'page' : undefined} onClick={() => setPage('submissions')}><Icon name="references" />Liens à transmettre</button>
+          </div>
+        </details>
+        <details className="navigation-group" open={['accounts', 'renewals', 'performance'].includes(page)}>
+          <summary><Icon name="people" /><span>Comptes</span></summary>
+          <div className="navigation-submenu">
+            <button type="button" aria-current={page === 'accounts' ? 'page' : undefined} onClick={() => setPage('accounts')}><Icon name="people" />Modèles et comptes</button>
+            <button type="button" aria-current={page === 'renewals' ? 'page' : undefined} onClick={() => setPage('renewals')}><Icon name="calendar" />Renouvellement de compte</button>
+            <button type="button" aria-current={page === 'performance' ? 'page' : undefined} onClick={() => setPage('performance')}><Icon name="stats" />Performance des comptes</button>
+          </div>
+        </details>
+        <details className="navigation-group" open={['presence', 'approvals'].includes(page)}>
+          <summary><Icon name="people" /><span>Agents</span></summary>
+          <div className="navigation-submenu">
+            <button type="button" aria-current={page === 'presence' ? 'page' : undefined} onClick={() => setPage('presence')}><Icon name="people" />Statut des agents</button>
+            {isAdmin && <button type="button" aria-current={page === 'approvals' ? 'page' : undefined} onClick={() => setPage('approvals')}><Icon name="people" />Gestion des accès</button>}
+          </div>
+        </details>
       </nav>
       <div className="account-session">
         <span className="sub">{email}</span>
