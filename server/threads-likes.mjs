@@ -178,11 +178,20 @@ export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false
     }
 
     if (resolveOnly) return reply(response, 200, { url: post.url.href })
-    if (incoming.searchParams.get('public') === '1') {
-      const fields = await readPublicPost(post, fetcher).catch(() => ({ likes: null, comments: null, publishedOn: null }))
-      if (!fields) return reply(response, 429, { error: 'Threads limite temporairement les demandes. Réessaie plus tard.' })
-      const author = ('author' in fields && fields.author) || post.url.pathname.split('/')[1].slice(1)
-      return reply(response, 200, { url: post.url.href, ...fields, author })
+    const publicRequest = incoming.searchParams.get('public') === '1'
+    let publicFields = null
+    if (publicRequest) {
+      publicFields = await readPublicPost(post, fetcher).catch(() => null)
+      const hasFields = publicFields && [publicFields.likes, publicFields.comments,
+        publicFields.publishedOn, publicFields.caption, publicFields.imageUrl].some(value => value != null && value !== '')
+      if (hasFields) {
+        const author = publicFields.author || post.url.pathname.split('/')[1].slice(1)
+        return reply(response, 200, { url: post.url.href, ...publicFields, author })
+      }
+      if (!apiKey?.trim()) return reply(response, 502, {
+        error: 'La lecture publique de Threads n’a fourni aucune donnée. Le lien peut être valide. Configure SCRAPEATLAS_API_KEY pour activer la récupération de secours.',
+        url: post.url.href,
+      })
     }
     if (!apiKey?.trim()) {
       return reply(response, 503, { error: deployed
@@ -224,10 +233,12 @@ export function threadsLikesMiddleware(apiKey, fetcher = fetch, deployed = false
       const username = typeof source.user?.username === 'string' ? source.user.username.trim() : ''
       const author = username ? '@' + username.replace(/^@/, '') : null
       const imageUrl = postImageUrl(source)
-      if (likes === null && comments === null && !caption && !author && !imageUrl) {
+      if (likes === null && comments === null && !caption && !imageUrl) {
         return reply(response, 502, { error: 'Les données de cette publication sont indisponibles.' })
       }
-      return reply(response, 200, { likes, comments, caption: caption || null, author, imageUrl })
+      const publishedOn = Number.isSafeInteger(source.taken_at) && source.taken_at > 0 && source.taken_at < 253402300800
+        ? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Indian/Antananarivo' }).format(new Date(source.taken_at * 1000)) : null
+      return reply(response, 200, { url: post.url.href, likes, comments, caption: caption || null, author, imageUrl, publishedOn })
     } catch {
       return reply(response, 502, { error: 'Impossible de récupérer les données de la publication. Réessaie ou complète les champs manuellement.' })
     }
